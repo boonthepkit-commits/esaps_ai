@@ -84,6 +84,7 @@ export const pageTitles: Record<string, { title: string; subtitle: string }> = {
   reconciliation: { title: 'Oracle FA Reconciliation', subtitle: 'Reconcile Physical Barcode/RFID asset subledgers with Oracle Fixed Assets General Ledger' },
   assets: { title: 'Asset Management', subtitle: 'Track and manage all organizational assets' },
   'asset-detail': { title: 'Asset Details', subtitle: 'Comprehensive asset information' },
+  'ticket-detail': { title: 'Ticket Details', subtitle: 'Comprehensive IT requisition and service desk work order' },
   'create-asset': { title: 'Create Asset', subtitle: 'Register a new asset in the system' },
   assignment: { title: 'Employee Management', subtitle: 'Manage employees and their assigned assets' },
   maintenance: { title: 'IT Requisition & Maintenance', subtitle: '4-Stage Service Desk: User Requisition ➔ Dept Approval (Delegated) ➔ IT Dispatch ➔ Technician Execution' },

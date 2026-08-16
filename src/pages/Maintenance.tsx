@@ -38,7 +38,13 @@ import {
   UserCheck,
   Settings,
   HelpCircle,
-  FileText
+  FileText,
+  Eye,
+  Edit,
+  Trash2,
+  Printer as PrintIcon,
+  Layers,
+  ArrowRightLeft
 } from 'lucide-react';
 import {
   Card,
@@ -52,8 +58,11 @@ import {
   Input,
   Select,
   Textarea,
-  Tabs
+  Tabs,
+  Avatar,
+  ConfirmDialog
 } from '@/components/ui';
+import { DataTable, type Column } from '@/components/DataTable';
 import {
   initialRequisitions,
   initialTechnicians,
@@ -65,7 +74,7 @@ import {
   type ITTechnician,
   type DelegatedApproverSetting
 } from '@/data/requisitionData';
-import { assets, employees } from '@/data/mockData';
+import { assets, employees, departments } from '@/data/mockData';
 import { cn } from '@/lib/cn';
 
 interface MaintenanceProps {
@@ -92,7 +101,7 @@ const priorityConfig: Record<PriorityLevel, { variant: 'error' | 'warning' | 'ac
 };
 
 export function Maintenance({ onNavigate }: MaintenanceProps) {
-  const { addToast } = useToast();
+  const { push } = useToast();
 
   // Primary State
   const [tickets, setTickets] = useState<ITRequisitionTicket[]>(initialRequisitions);
@@ -105,9 +114,18 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [deptFilter, setDeptFilter] = useState('ALL');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // AI Natural Language Search State
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiActive, setAiActive] = useState(false);
+  const [aiInterpretation, setAiInterpretation] = useState<{ filters: { label: string; value: string }[]; count: number } | null>(null);
 
   // Active Drawers / Modals
   const [selectedTicket, setSelectedTicket] = useState<ITRequisitionTicket | null>(null);
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
   const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
   const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
@@ -152,6 +170,110 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
     return assets.filter(a => a.assignedTo !== 'Sarah Chen');
   }, []);
 
+  // AI Natural Language Search Handler
+  const handleAISearch = () => {
+    if (!aiQuery.trim()) return;
+    const lower = aiQuery.toLowerCase();
+    const parsedFilters: { label: string; value: string }[] = [];
+
+    // Priority Detection
+    if (lower.includes('critical') || lower.includes('urgent') || lower.includes('emergency')) {
+      parsedFilters.push({ label: 'Priority', value: 'Critical' });
+    } else if (lower.includes('high')) {
+      parsedFilters.push({ label: 'Priority', value: 'High' });
+    }
+
+    // Status Detection
+    if (lower.includes('pending approval') || lower.includes('dept approval') || lower.includes('need approve')) {
+      parsedFilters.push({ label: 'Status', value: 'PENDING_DEPT_APPROVAL' });
+    } else if (lower.includes('dispatch') || lower.includes('assign tech') || lower.includes('pending dispatch')) {
+      parsedFilters.push({ label: 'Status', value: 'PENDING_IT_DISPATCH' });
+    } else if (lower.includes('hold') || lower.includes('on-hold') || lower.includes('waiting')) {
+      parsedFilters.push({ label: 'Status', value: 'ON_HOLD' });
+    } else if (lower.includes('progress') || lower.includes('repairing') || lower.includes('working')) {
+      parsedFilters.push({ label: 'Status', value: 'IN_PROGRESS' });
+    } else if (lower.includes('done') || lower.includes('resolved') || lower.includes('completed') || lower.includes('closed')) {
+      parsedFilters.push({ label: 'Status', value: 'DONE' });
+    }
+
+    // Category Detection
+    if (lower.includes('hardware') || lower.includes('repair') || lower.includes('screen') || lower.includes('battery')) {
+      parsedFilters.push({ label: 'Category', value: 'Hardware Fault & Repair' });
+    } else if (lower.includes('software') || lower.includes('os') || lower.includes('license')) {
+      parsedFilters.push({ label: 'Category', value: 'Software & OS Issue' });
+    } else if (lower.includes('network') || lower.includes('wifi') || lower.includes('wi-fi') || lower.includes('vpn')) {
+      parsedFilters.push({ label: 'Category', value: 'Network & Wi-Fi' });
+    } else if (lower.includes('upgrade') || lower.includes('replace') || lower.includes('replacement')) {
+      parsedFilters.push({ label: 'Category', value: 'Equipment Replacement' });
+    }
+
+    // Department Detection
+    if (lower.includes('engineering') || lower.includes('eng')) {
+      parsedFilters.push({ label: 'Department', value: 'Engineering' });
+    } else if (lower.includes('sales')) {
+      parsedFilters.push({ label: 'Department', value: 'Sales' });
+    } else if (lower.includes('design')) {
+      parsedFilters.push({ label: 'Department', value: 'Design' });
+    } else if (lower.includes('finance')) {
+      parsedFilters.push({ label: 'Department', value: 'Finance' });
+    }
+
+    const count = tickets.filter((t) => {
+      return parsedFilters.every((f) => {
+        if (f.label === 'Priority') return t.priority === f.value;
+        if (f.label === 'Status') return t.status === f.value;
+        if (f.label === 'Category') return t.category === f.value;
+        if (f.label === 'Department') return t.requester.department === f.value;
+        return true;
+      });
+    }).length;
+
+    setAiInterpretation({ filters: parsedFilters, count });
+    setAiActive(true);
+
+    if (parsedFilters.some(f => f.label === 'Status')) {
+      const sf = parsedFilters.find(f => f.label === 'Status');
+      if (sf) setStatusFilter(sf.value);
+    }
+    if (parsedFilters.some(f => f.label === 'Priority')) {
+      const pf = parsedFilters.find(f => f.label === 'Priority');
+      if (pf) setPriorityFilter(pf.value);
+    }
+    if (parsedFilters.some(f => f.label === 'Category')) {
+      const cf = parsedFilters.find(f => f.label === 'Category');
+      if (cf) setCategoryFilter(cf.value);
+    }
+    if (parsedFilters.some(f => f.label === 'Department')) {
+      const df = parsedFilters.find(f => f.label === 'Department');
+      if (df) setDeptFilter(df.value);
+    }
+  };
+
+  const clearAISearch = () => {
+    setAiQuery('');
+    setAiInterpretation(null);
+    setAiActive(false);
+    setStatusFilter('ALL');
+    setPriorityFilter('ALL');
+    setCategoryFilter('ALL');
+    setDeptFilter('ALL');
+    setPerspective('ALL');
+  };
+
+  const resetAllFilters = () => {
+    setStatusFilter('ALL');
+    setPriorityFilter('ALL');
+    setCategoryFilter('ALL');
+    setDeptFilter('ALL');
+    setPerspective('ALL');
+    setSearchQuery('');
+    setAiQuery('');
+    setAiInterpretation(null);
+    setAiActive(false);
+  };
+
+  const hasActiveFilters = statusFilter !== 'ALL' || priorityFilter !== 'ALL' || categoryFilter !== 'ALL' || deptFilter !== 'ALL' || perspective !== 'ALL' || searchQuery.trim() !== '' || aiActive;
+
   // Filtered Tickets based on Perspective & Search
   const filteredTickets = useMemo(() => {
     return tickets.filter(ticket => {
@@ -167,96 +289,106 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
         else if (statusFilter !== 'ACTIVE' && ticket.status !== statusFilter) return false;
       }
 
+      // Priority filter
+      if (priorityFilter !== 'ALL' && ticket.priority !== priorityFilter) return false;
+
       // Category filter
       if (categoryFilter !== 'ALL' && ticket.category !== categoryFilter) return false;
+
+      // Department filter
+      if (deptFilter !== 'ALL' && ticket.requester.department !== deptFilter) return false;
 
       // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchTitle = ticket.title.toLowerCase().includes(q);
         const matchCode = ticket.ticketCode.toLowerCase().includes(q);
-        const matchAsset = ticket.asset.name.toLowerCase().includes(q) || ticket.asset.code.toLowerCase().includes(q);
-        const matchRequester = ticket.requester.name.toLowerCase().includes(q);
-        if (!matchTitle && !matchCode && !matchAsset && !matchRequester) return false;
+        const matchAsset = ticket.asset.name.toLowerCase().includes(q) || ticket.asset.code.toLowerCase().includes(q) || ticket.asset.serialNumber.toLowerCase().includes(q);
+        const matchRequester = ticket.requester.name.toLowerCase().includes(q) || ticket.requester.department.toLowerCase().includes(q);
+        const matchTech = ticket.itAssignment.technicianName?.toLowerCase().includes(q);
+        if (!matchTitle && !matchCode && !matchAsset && !matchRequester && !matchTech) return false;
       }
 
       return true;
     });
-  }, [tickets, perspective, statusFilter, categoryFilter, searchQuery]);
+  }, [tickets, perspective, statusFilter, priorityFilter, categoryFilter, deptFilter, searchQuery]);
 
-  // Statistics
+  // KPI Calculations
   const stats = useMemo(() => {
     return {
+      total: tickets.length,
       pendingDept: tickets.filter(t => t.status === 'PENDING_DEPT_APPROVAL').length,
       pendingDispatch: tickets.filter(t => t.status === 'PENDING_IT_DISPATCH').length,
-      activeJobs: tickets.filter(t => ['PLANNING', 'IN_PROGRESS'].includes(t.status)).length,
+      inProgress: tickets.filter(t => ['PLANNING', 'IN_PROGRESS'].includes(t.status)).length,
       onHold: tickets.filter(t => t.status === 'ON_HOLD').length,
       done: tickets.filter(t => t.status === 'DONE').length,
-      total: tickets.length
     };
   }, [tickets]);
 
-  // Handlers
+  // Handler: Create New Requisition
   const handleCreateRequisition = () => {
     if (!formTitle.trim()) {
-      addToast('Please enter a request summary title', 'error');
+      push({ variant: 'warning', title: 'Subject Required', message: 'Please enter a summary title for this requisition' });
       return;
     }
 
     const selectedAsset = assets.find(a => a.code === formSelectedAssetCode) || assets[0];
-    const isMyAsset = formAssetMode === 'my';
+    const newId = `REQ-${Date.now().toString().slice(-4)}`;
+    const newCode = `ITR-2026-${(tickets.length + 1).toString().padStart(3, '0')}`;
+    const slaHours = formPriority === 'Critical' ? 2 : formPriority === 'High' ? 8 : formPriority === 'Medium' ? 24 : 48;
 
     const newTicket: ITRequisitionTicket = {
-      id: `req-${Date.now()}`,
-      ticketCode: `REQ-2026-00${tickets.length + 42}`,
-      title: formTitle,
+      id: newId,
+      ticketCode: newCode,
       category: formCategory,
       priority: formPriority,
-      slaTargetHours: formPriority === 'Critical' ? 2 : formPriority === 'High' ? 8 : formPriority === 'Medium' ? 24 : 48,
-      description: formDescription || 'User submitted IT equipment requisition / repair request.',
+      slaTargetHours: slaHours,
+      title: formTitle,
+      description: formDescription || 'User requested inspection and servicing.',
       location: formLocation,
       createdAt: 'Just now',
       status: 'PENDING_DEPT_APPROVAL',
       requester: {
-        id: 'emp-1',
+        id: 'emp-101',
         name: 'Sarah Chen',
-        email: 'sarah.chen@company.com',
-        jobTitle: 'Senior Full Stack Engineer',
         department: 'Engineering',
+        jobTitle: 'Senior Full Stack Engineer',
+        email: 'sarah.chen@enterprise.io',
+        avatarColor: 'bg-indigo-600',
         initials: 'SC',
-        avatarColor: 'bg-indigo-600'
       },
       asset: {
         id: selectedAsset.id,
         code: selectedAsset.code,
         name: selectedAsset.name,
         type: selectedAsset.type,
-        serialNumber: selectedAsset.serialNumber,
-        location: selectedAsset.location,
-        isMyAssignedAsset: isMyAsset,
+        serialNumber: selectedAsset.serialNumber || 'SN-UNKNOWN-99',
+        location: selectedAsset.location || 'HQ - Floor 4',
+        isMyAssignedAsset: formAssetMode === 'my',
         purchaseCost: selectedAsset.purchaseCost,
-        currentValue: selectedAsset.currentValue
+        currentValue: selectedAsset.currentValue,
       },
       departmentApproval: {
         status: 'Pending',
-        approverName: 'Sarah Jenkins (VP of Engineering)',
-        approverTitle: 'VP of Engineering',
+        approverName: 'David Chen',
+        approverTitle: 'Principal Engineering Lead',
         isDelegated: true,
-        delegatedBy: 'David Chen (Acting Lead Engineer - Delegated)'
+        delegatedBy: 'Sarah Jenkins (VP of Engineering - On Leave)',
       },
-      itAssignment: {},
+      itAssignment: {
+        assignedBy: 'Alex Rivera (IT Service Desk Lead)',
+      },
       itExecution: {
-        currentStatus: 'Pending Dispatch'
+        currentStatus: 'Pending Dispatch',
       },
       timeline: [
         {
-          id: `tl-${Date.now()}`,
+          id: `t-${Date.now()}`,
           stage: 'Creation',
           actorName: 'Sarah Chen',
-          actorRole: 'Requester (Engineering)',
+          actorRole: 'Requester (Senior Engineer)',
           timestamp: 'Just now',
-          action: 'Created IT Requisition Ticket',
-          notes: `Asset ${selectedAsset.code} (${selectedAsset.name}) attached from ${isMyAsset ? 'My Assigned Assets' : 'Department Inventory'}`
+          action: 'Requisition submitted and routed to department head for review.',
         }
       ]
     };
@@ -265,188 +397,156 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
     setIsNewTicketModalOpen(false);
     setFormTitle('');
     setFormDescription('');
-    addToast('IT Requisition Submitted', 'success', `Ticket ${newTicket.ticketCode} routed to Department Approver.`);
+
+    push({
+      variant: 'success',
+      title: 'IT Requisition Submitted',
+      message: `${newCode} routed to Department Approver (David Chen) for sign-off.`
+    });
   };
 
+  // Handler: Department Head Approve / Reject
   const handleApproveReject = () => {
     if (!selectedTicket) return;
 
-    const isApproved = approvalAction === 'Approve';
-    const updatedTickets = tickets.map(t => {
-      if (t.id === selectedTicket.id) {
-        return {
-          ...t,
-          status: isApproved ? ('PENDING_IT_DISPATCH' as RequisitionStatus) : ('REJECTED_BY_DEPT' as RequisitionStatus),
-          departmentApproval: {
-            ...t.departmentApproval,
-            status: isApproved ? ('Approved' as const) : ('Rejected' as const),
-            isDelegated: useDelegatedApprover,
-            delegatedBy: useDelegatedApprover ? 'David Chen (Principal Lead - Delegated Approver)' : undefined,
-            approvedAt: 'Just now',
-            comments: approvalComments || (isApproved ? 'Approved for IT resolution.' : 'Rejected by department head.')
-          },
-          timeline: [
-            ...t.timeline,
-            {
-              id: `tl-${Date.now()}`,
-              stage: 'Dept Approval' as const,
-              actorName: useDelegatedApprover ? 'David Chen (Acting for Sarah Jenkins)' : 'Sarah Jenkins',
-              actorRole: useDelegatedApprover ? 'Delegated Approver' : 'Department Head',
-              timestamp: 'Just now',
-              action: isApproved ? 'Department Head Approved Ticket' : 'Department Head Rejected Ticket',
-              notes: approvalComments || (isApproved ? 'Proceed with IT resolution' : 'Request rejected'),
-              badge: useDelegatedApprover ? 'Delegated Approver' : undefined
+    if (approvalAction === 'Approve') {
+      const updated = tickets.map(t => {
+        if (t.id === selectedTicket.id) {
+          return {
+            ...t,
+            status: 'PENDING_IT_DISPATCH' as RequisitionStatus,
+            departmentApproval: {
+              ...t.departmentApproval,
+              status: 'Approved' as const,
+              approvedAt: 'Just now',
+              approverName: useDelegatedApprover ? 'David Chen (Delegated)' : 'Sarah Jenkins',
+              comments: approvalComments || 'Approved. Expedite equipment repair as required.',
             }
-          ]
-        };
-      }
-      return t;
-    });
-
-    setTickets(updatedTickets);
-    setSelectedTicket(updatedTickets.find(t => t.id === selectedTicket.id) || null);
-    setIsApproveModalOpen(false);
-    setApprovalComments('');
-
-    addToast(
-      isApproved ? 'Ticket Approved by Department' : 'Ticket Rejected',
-      isApproved ? 'success' : 'warning',
-      isApproved ? `${selectedTicket.ticketCode} sent to IT Dispatch Queue.` : 'Requester notified.'
-    );
-  };
-
-  const handleDispatchIT = () => {
-    if (!selectedTicket) return;
-
-    const tech = technicians.find(tc => tc.id === dispatchTechId) || technicians[0];
-    const cost = parseFloat(dispatchEstimatedCost) || 0;
-
-    const updatedTickets = tickets.map(t => {
-      if (t.id === selectedTicket.id) {
-        return {
-          ...t,
-          status: 'PLANNING' as RequisitionStatus,
-          itAssignment: {
-            assignedBy: 'Michael Chang (IT Operations Lead)',
-            assignedAt: 'Just now',
-            technicianId: tech.id,
-            technicianName: tech.name,
-            technicianRole: tech.role,
-            technicianAvatar: tech.avatarColor,
-            estimatedCost: cost,
-            targetResolutionDate: dispatchTargetDate
-          },
-          itExecution: {
-            ...t.itExecution,
-            currentStatus: 'Planning' as const,
-            diagnosticNotes: dispatchNotes || 'Assigned to specialist for hardware/software triage.'
-          },
-          timeline: [
-            ...t.timeline,
-            {
-              id: `tl-${Date.now()}`,
-              stage: 'IT Assignment' as const,
-              actorName: 'Michael Chang',
-              actorRole: 'IT Operations Lead',
-              timestamp: 'Just now',
-              action: `Assigned to ${tech.name} (${tech.role})`,
-              notes: `Target Date: ${dispatchTargetDate} | Est Cost: $${cost}`
+          };
+        }
+        return t;
+      });
+      setTickets(updated);
+      setSelectedTicket(updated.find(t => t.id === selectedTicket.id) || null);
+      setIsApproveModalOpen(false);
+      setApprovalComments('');
+      push({
+        variant: 'success',
+        title: 'Requisition Approved',
+        message: `${selectedTicket.ticketCode} passed to IT Dispatch Desk.`
+      });
+    } else {
+      const updated = tickets.map(t => {
+        if (t.id === selectedTicket.id) {
+          return {
+            ...t,
+            status: 'REJECTED_BY_DEPT' as RequisitionStatus,
+            departmentApproval: {
+              ...t.departmentApproval,
+              status: 'Rejected' as const,
+              approvedAt: 'Just now (Rejected)',
+              comments: approvalComments || 'Request rejected by department authority.',
             }
-          ]
-        };
-      }
-      return t;
-    });
-
-    setTickets(updatedTickets);
-    setSelectedTicket(updatedTickets.find(t => t.id === selectedTicket.id) || null);
-    setIsDispatchModalOpen(false);
-    setDispatchNotes('');
-
-    addToast('IT Technician Assigned', 'success', `Assigned ${tech.name} to ${selectedTicket.ticketCode}.`);
-  };
-
-  const handleUpdateExecutionStatus = () => {
-    if (!selectedTicket) return;
-
-    const target = updateTargetStatus;
-    let newStatus: RequisitionStatus = 'IN_PROGRESS';
-    if (target === 'Planning') newStatus = 'PLANNING';
-    if (target === 'In-Progress') newStatus = 'IN_PROGRESS';
-    if (target === 'On-Hold') newStatus = 'ON_HOLD';
-    if (target === 'Done') newStatus = 'DONE';
-
-    const cost = parseFloat(updateActualCost) || 0;
-    const downtime = parseFloat(updateDowntimeHours) || 0;
-    const parts = updatePartsUsed.split(',').map(p => p.trim()).filter(Boolean);
-
-    const updatedTickets = tickets.map(t => {
-      if (t.id === selectedTicket.id) {
-        const newExecution = {
-          ...t.itExecution,
-          currentStatus: target,
-          holdCategory: target === 'On-Hold' ? updateHoldCategory : undefined,
-          holdReason: target === 'On-Hold' ? updateHoldReason : undefined,
-          resolutionNotes: target === 'Done' ? updateResolutionNotes || 'Issue successfully resolved and verified.' : t.itExecution.resolutionNotes,
-          actualCost: target === 'Done' ? cost : t.itExecution.actualCost,
-          downtimeHours: target === 'Done' ? downtime : t.itExecution.downtimeHours,
-          partsUsed: parts.length > 0 ? parts : t.itExecution.partsUsed,
-          completedAt: target === 'Done' ? 'Just now' : undefined,
-          userSatisfactionRating: target === 'Done' ? 5 : undefined
-        };
-
-        return {
-          ...t,
-          status: newStatus,
-          itExecution: newExecution,
-          timeline: [
-            ...t.timeline,
-            {
-              id: `tl-${Date.now()}`,
-              stage: target === 'Done' ? ('Resolution' as const) : (target as any),
-              actorName: t.itAssignment.technicianName || 'Assigned Technician',
-              actorRole: t.itAssignment.technicianRole || 'IT Specialist',
-              timestamp: 'Just now',
-              action: `Status updated to ${target.toUpperCase()}`,
-              notes: target === 'On-Hold' ? `Hold Reason: ${updateHoldReason}` : target === 'Done' ? `Resolution: ${updateResolutionNotes || 'Verified working'}` : 'Diagnostic and repair progress logged.'
-            }
-          ]
-        };
-      }
-      return t;
-    });
-
-    setTickets(updatedTickets);
-    setSelectedTicket(updatedTickets.find(t => t.id === selectedTicket.id) || null);
-    setIsStatusUpdateModalOpen(false);
-
-    addToast('Status Updated', 'info', `${selectedTicket.ticketCode} is now ${target}.`);
-  };
-
-  const getStatusBadge = (status: RequisitionStatus) => {
-    switch (status) {
-      case 'PENDING_DEPT_APPROVAL':
-        return <Badge variant="warning" dot>1. Pending Dept Approval</Badge>;
-      case 'REJECTED_BY_DEPT':
-        return <Badge variant="error" dot>Dept Rejected</Badge>;
-      case 'PENDING_IT_DISPATCH':
-        return <Badge variant="accent" dot>2. Pending IT Dispatch</Badge>;
-      case 'PLANNING':
-        return <Badge variant="default" dot>3. IT Planning</Badge>;
-      case 'IN_PROGRESS':
-        return <Badge variant="brand" dot>3. In-Progress</Badge>;
-      case 'ON_HOLD':
-        return <Badge variant="warning" dot>3. On-Hold</Badge>;
-      case 'DONE':
-        return <Badge variant="success" dot>4. Done / Resolved</Badge>;
-      default:
-        return <Badge variant="default">{status}</Badge>;
+          };
+        }
+        return t;
+      });
+      setTickets(updated);
+      setSelectedTicket(updated.find(t => t.id === selectedTicket.id) || null);
+      setIsApproveModalOpen(false);
+      push({
+        variant: 'info',
+        title: 'Requisition Rejected',
+        message: `${selectedTicket.ticketCode} returned to requester.`
+      });
     }
   };
 
+  // Handler: IT Dispatch Assignment
+  const handleDispatchAssign = () => {
+    if (!selectedTicket) return;
+    const tech = technicians.find(t => t.id === dispatchTechId) || technicians[0];
+
+    const updated = tickets.map(t => {
+      if (t.id === selectedTicket.id) {
+        return {
+          ...t,
+          status: 'IN_PROGRESS' as RequisitionStatus,
+          itAssignment: {
+            ...t.itAssignment,
+            assignedAt: 'Just now',
+            assignedBy: 'Alex Rivera (IT Lead)',
+            technicianId: tech.id,
+            technicianName: tech.name,
+            technicianRole: tech.specialty,
+            estimatedCost: Number(dispatchEstimatedCost) || 0,
+            targetResolutionDate: dispatchTargetDate,
+          },
+          itExecution: {
+            ...t.itExecution,
+            currentStatus: 'In-Progress' as const,
+            diagnosticNotes: dispatchNotes || 'Assigned to specialist technician.',
+          }
+        };
+      }
+      return t;
+    });
+
+    setTickets(updated);
+    setSelectedTicket(updated.find(t => t.id === selectedTicket.id) || null);
+    setIsDispatchModalOpen(false);
+    push({
+      variant: 'success',
+      title: 'Technician Assigned',
+      message: `${tech.name} has been dispatched for ${selectedTicket.ticketCode}.`
+    });
+  };
+
+  // Handler: IT Technician Status Update (In-Progress, Hold, Done)
+  const handleTechnicianStatusUpdate = () => {
+    if (!selectedTicket) return;
+
+    let nextStatus: RequisitionStatus = 'IN_PROGRESS';
+    if (updateTargetStatus === 'Planning') nextStatus = 'PLANNING';
+    if (updateTargetStatus === 'In-Progress') nextStatus = 'IN_PROGRESS';
+    if (updateTargetStatus === 'On-Hold') nextStatus = 'ON_HOLD';
+    if (updateTargetStatus === 'Done') nextStatus = 'DONE';
+
+    const updated = tickets.map(t => {
+      if (t.id === selectedTicket.id) {
+        return {
+          ...t,
+          status: nextStatus,
+          itExecution: {
+            ...t.itExecution,
+            currentStatus: updateTargetStatus,
+            holdCategory: nextStatus === 'ON_HOLD' ? updateHoldCategory : t.itExecution.holdCategory,
+            holdReason: nextStatus === 'ON_HOLD' ? updateHoldReason : t.itExecution.holdReason,
+            resolutionNotes: nextStatus === 'DONE' ? (updateResolutionNotes || 'Repaired and functional test verified.') : t.itExecution.resolutionNotes,
+            actualCost: nextStatus === 'DONE' ? Number(updateActualCost) : t.itExecution.actualCost,
+            downtimeHours: nextStatus === 'DONE' ? Number(updateDowntimeHours) : t.itExecution.downtimeHours,
+            partsUsed: nextStatus === 'DONE' ? updatePartsUsed.split(',').map(s => s.trim()) : t.itExecution.partsUsed,
+            completedAt: nextStatus === 'DONE' ? 'Just now' : t.itExecution.completedAt,
+          }
+        };
+      }
+      return t;
+    });
+
+    setTickets(updated);
+    setSelectedTicket(updated.find(t => t.id === selectedTicket.id) || null);
+    setIsStatusUpdateModalOpen(false);
+    push({
+      variant: 'success',
+      title: `Status Updated: ${updateTargetStatus}`,
+      message: `Work log recorded for ${selectedTicket.ticketCode}.`
+    });
+  };
+
+  // Helper: Asset Icon
   const getAssetIcon = (type: string) => {
     switch (type.toLowerCase()) {
-      case 'laptop': return <Laptop className="h-4 w-4 text-indigo-600" />;
+      case 'laptop': return <Laptop className="h-4 w-4 text-brand-600" />;
       case 'monitor': return <Monitor className="h-4 w-4 text-blue-600" />;
       case 'smartphone': return <Smartphone className="h-4 w-4 text-purple-600" />;
       case 'server': return <Server className="h-4 w-4 text-emerald-600" />;
@@ -458,44 +558,553 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
     }
   };
 
+  // Helper: Status Badge
+  const getStatusBadge = (status: RequisitionStatus) => {
+    switch (status) {
+      case 'PENDING_DEPT_APPROVAL':
+        return <Badge variant="warning" dot>1. Dept Approval</Badge>;
+      case 'PENDING_IT_DISPATCH':
+        return <Badge variant="brand" dot>2. IT Dispatch</Badge>;
+      case 'PLANNING':
+        return <Badge variant="accent" dot>3. Planning</Badge>;
+      case 'IN_PROGRESS':
+        return <Badge variant="warning" dot>3. In-Progress</Badge>;
+      case 'ON_HOLD':
+        return <Badge variant="error" dot>3. On-Hold</Badge>;
+      case 'DONE':
+        return <Badge variant="success" dot>4. Resolved</Badge>;
+      case 'REJECTED_BY_DEPT':
+        return <Badge variant="error" dot>Rejected</Badge>;
+      default:
+        return <Badge variant="neutral">{status}</Badge>;
+    }
+  };
+
+  // Columns definition for DataTable (Standardized with Asset Management)
+  const columns: Column<ITRequisitionTicket>[] = [
+    {
+      key: 'ticketCode',
+      header: 'Ticket Code & Subject',
+      sortable: true,
+      sortValue: (r) => r.ticketCode,
+      render: (r) => (
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg bg-surface-100 flex items-center justify-center shrink-0">
+            {getAssetIcon(r.asset.type)}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-surface-900">{r.ticketCode}</span>
+              <Badge variant={priorityConfig[r.priority].variant} dot>
+                {r.priority}
+              </Badge>
+            </div>
+            <p className="text-caption text-surface-600 truncate max-w-xs">{r.title}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'asset',
+      header: 'Asset / Device',
+      sortable: true,
+      sortValue: (r) => r.asset.name,
+      render: (r) => (
+        <div className="min-w-0">
+          <p className="font-medium text-surface-900 truncate">{r.asset.name}</p>
+          <p className="text-caption text-surface-500 font-mono">{r.asset.code} · {r.asset.serialNumber}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category & SLA',
+      sortable: true,
+      sortValue: (r) => r.category,
+      render: (r) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-surface-700 text-caption font-medium">{r.category}</span>
+          <span className="text-[11px] text-surface-400 font-mono">{priorityConfig[r.priority].sla}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'requester',
+      header: 'Requester',
+      sortable: true,
+      sortValue: (r) => r.requester.name,
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <Avatar
+            initials={r.requester.initials}
+            size="xs"
+            color={r.requester.avatarColor || 'bg-brand-500'}
+          />
+          <div className="min-w-0">
+            <p className="text-caption font-medium text-surface-800 truncate">{r.requester.name}</p>
+            <p className="text-[11px] text-surface-400">{r.requester.department}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Workflow Stage',
+      sortable: true,
+      sortValue: (r) => r.status,
+      render: (r) => getStatusBadge(r.status),
+    },
+    {
+      key: 'assignedTech',
+      header: 'Assigned Tech',
+      sortable: true,
+      sortValue: (r) => r.itAssignment.technicianName || '',
+      render: (r) => r.itAssignment.technicianName ? (
+        <div className="flex items-center gap-1.5">
+          <Wrench className="h-3.5 w-3.5 text-brand-600" />
+          <div className="min-w-0">
+            <span className="text-caption font-medium text-surface-800 truncate block">{r.itAssignment.technicianName}</span>
+            <span className="text-[10px] text-surface-400 block">{r.itAssignment.technicianRole}</span>
+          </div>
+        </div>
+      ) : (
+        <span className="text-caption text-surface-400 italic">Unassigned</span>
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Created / Location',
+      sortable: true,
+      sortValue: (r) => r.createdAt,
+      render: (r) => (
+        <div className="text-[11px] text-surface-500">
+          <p className="font-medium text-surface-700">{r.createdAt}</p>
+          <p className="text-surface-400 truncate max-w-[140px]">{r.location}</p>
+        </div>
+      ),
+    },
+  ];
+
+  // Row Actions (Dropdown menu for each row in DataTable)
+  const rowActions = (row: ITRequisitionTicket) => {
+    const actions = [
+      {
+        label: 'View Ticket Details',
+        icon: <Eye className="h-4 w-4" />,
+        onClick: () => {
+          onNavigate('ticket-detail', row.ticketCode);
+        },
+      },
+    ];
+
+    if (row.status === 'PENDING_DEPT_APPROVAL') {
+      actions.push({
+        label: 'Department Approval',
+        icon: <ShieldCheck className="h-4 w-4 text-amber-600" />,
+        onClick: () => {
+          setSelectedTicket(row);
+          setIsApproveModalOpen(true);
+        },
+      });
+    }
+
+    if (row.status === 'PENDING_IT_DISPATCH') {
+      actions.push({
+        label: 'Assign IT Technician',
+        icon: <Users className="h-4 w-4 text-brand-600" />,
+        onClick: () => {
+          setSelectedTicket(row);
+          setIsDispatchModalOpen(true);
+        },
+      });
+    }
+
+    if (['PLANNING', 'IN_PROGRESS', 'ON_HOLD'].includes(row.status)) {
+      actions.push({
+        label: 'Update Tech Status',
+        icon: <RotateCcw className="h-4 w-4 text-emerald-600" />,
+        onClick: () => {
+          setSelectedTicket(row);
+          setIsStatusUpdateModalOpen(true);
+        },
+      });
+    }
+
+    actions.push(
+      {
+        label: 'View Asset Profile',
+        icon: <Laptop className="h-4 w-4" />,
+        onClick: () => onNavigate('assets', row.asset.id),
+      },
+      {
+        label: 'Print Work Order',
+        icon: <PrintIcon className="h-4 w-4" />,
+        onClick: () => {
+          push({
+            variant: 'info',
+            title: 'Print Work Order',
+            message: `Generated printable slip for ${row.ticketCode}`,
+          });
+        },
+      }
+    );
+
+    return actions;
+  };
+
   return (
-    <div className="flex flex-col gap-5">
-      {/* Top Header Card */}
-      <div className="bg-gradient-to-r from-surface-900 via-surface-900 to-brand-950 text-white rounded-xl p-5 border border-surface-800 shadow-sm">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="h-12 w-12 rounded-xl bg-brand-600/30 border border-brand-500/30 flex items-center justify-center text-brand-300 shrink-0 shadow-inner">
-              <Wrench className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-caption font-semibold px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                  IT Service Desk & Requisition
+    <div className="flex flex-col gap-4">
+      {/* 1. Standardized Top Action Bar (Aligned with Asset Management) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="brand">{filteredTickets.length} tickets</Badge>
+          
+          {/* Role Perspective Quick Pills */}
+          <div className="inline-flex bg-surface-100 rounded-lg p-0.5 border border-surface-200 text-caption">
+            <button
+              onClick={() => setPerspective('ALL')}
+              className={cn(
+                'px-2.5 py-1 rounded-md font-medium transition-all',
+                perspective === 'ALL' ? 'bg-white text-surface-900 shadow-xs' : 'text-surface-600 hover:text-surface-900'
+              )}
+            >
+              All Roles
+            </button>
+            <button
+              onClick={() => setPerspective('USER')}
+              className={cn(
+                'px-2.5 py-1 rounded-md font-medium transition-all',
+                perspective === 'USER' ? 'bg-brand-600 text-white shadow-xs' : 'text-surface-600 hover:text-surface-900'
+              )}
+            >
+              👤 Employee
+            </button>
+            <button
+              onClick={() => setPerspective('DEPT_APPROVER')}
+              className={cn(
+                'px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1',
+                perspective === 'DEPT_APPROVER' ? 'bg-amber-600 text-white shadow-xs' : 'text-surface-600 hover:text-surface-900'
+              )}
+            >
+              👔 Dept Approver
+              {stats.pendingDept > 0 && (
+                <span className="h-4 px-1 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px]">
+                  {stats.pendingDept}
                 </span>
-                <span className="text-caption text-surface-400">4-Stage Governance Workflow</span>
-              </div>
-              <h1 className="text-title font-bold text-white mt-1">
-                IT Requisition & Asset Maintenance (ระบบแจ้งซ่อมและเบิก/ร้องขอไอที)
-              </h1>
-              <p className="text-caption text-surface-300 mt-0.5">
-                User Requisition ➔ Department Head Approval (with Delegated Approver) ➔ IT Dispatch ➔ Technician Resolution
-              </p>
-            </div>
+              )}
+            </button>
+            <button
+              onClick={() => setPerspective('IT_MANAGER')}
+              className={cn(
+                'px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1',
+                perspective === 'IT_MANAGER' ? 'bg-brand-600 text-white shadow-xs' : 'text-surface-600 hover:text-surface-900'
+              )}
+            >
+              🛠️ IT Dispatch
+              {stats.pendingDispatch > 0 && (
+                <span className="h-4 px-1 rounded-full bg-brand-200 text-brand-900 font-bold text-[10px]">
+                  {stats.pendingDispatch}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setPerspective('IT_TECH')}
+              className={cn(
+                'px-2.5 py-1 rounded-md font-medium transition-all',
+                perspective === 'IT_TECH' ? 'bg-emerald-600 text-white shadow-xs' : 'text-surface-600 hover:text-surface-900'
+              )}
+            >
+              🔧 Technician
+            </button>
           </div>
 
-          <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto flex-wrap">
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<X className="h-3.5 w-3.5" />}
+              onClick={resetAllFilters}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* View Mode Toggle: Board vs List */}
+          <div className="inline-flex bg-surface-100 rounded-lg p-0.5 border border-surface-200">
+            <button
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'px-2.5 py-1 rounded-md text-caption font-medium transition-all flex items-center gap-1.5',
+                viewMode === 'list' ? 'bg-white text-surface-900 shadow-xs' : 'text-surface-500 hover:text-surface-800'
+              )}
+              title="Data Table View"
+            >
+              <List className="h-4 w-4" />
+              <span>Table</span>
+            </button>
+            <button
+              onClick={() => setViewMode('board')}
+              className={cn(
+                'px-2.5 py-1 rounded-md text-caption font-medium transition-all flex items-center gap-1.5',
+                viewMode === 'board' ? 'bg-white text-surface-900 shadow-xs' : 'text-surface-500 hover:text-surface-800'
+              )}
+              title="Kanban Board View"
+            >
+              <Kanban className="h-4 w-4" />
+              <span>Kanban</span>
+            </button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            leftIcon={<ShieldCheck className="h-4 w-4 text-amber-600" />}
+            onClick={() => setIsDelegationModalOpen(true)}
+          >
+            Delegated Approvers
+          </Button>
+
+          <Button
+            size="sm"
+            leftIcon={<Plus className="h-4 w-4" />}
+            onClick={() => {
+              setFormAssetMode('my');
+              setFormSelectedAssetCode(myAssignedAssets[0]?.code || 'AST-0001');
+              setIsNewTicketModalOpen(true);
+            }}
+          >
+            New IT Requisition
+          </Button>
+        </div>
+      </div>
+
+      {/* 2. KPI Summary Cards Grid (Aligned with Enterprise Standards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <Card
+          className={cn(
+            'p-3.5 cursor-pointer transition-all border hover:shadow-sm',
+            statusFilter === 'PENDING_DEPT_APPROVAL' ? 'border-amber-500 bg-amber-50/40 ring-1 ring-amber-500' : 'hover:border-surface-300'
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'PENDING_DEPT_APPROVAL' ? 'ALL' : 'PENDING_DEPT_APPROVAL')}
+        >
+          <div className="flex items-center justify-between text-caption text-surface-500">
+            <span className="font-medium">1. Dept Approval</span>
+            <div className="h-7 w-7 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
+              <ShieldCheck className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-title font-bold text-surface-900 mt-1">{stats.pendingDept}</p>
+          <p className="text-[11px] text-amber-700 mt-0.5 font-medium">Awaiting manager sign-off</p>
+        </Card>
+
+        <Card
+          className={cn(
+            'p-3.5 cursor-pointer transition-all border hover:shadow-sm',
+            statusFilter === 'PENDING_IT_DISPATCH' ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-500' : 'hover:border-surface-300'
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'PENDING_IT_DISPATCH' ? 'ALL' : 'PENDING_IT_DISPATCH')}
+        >
+          <div className="flex items-center justify-between text-caption text-surface-500">
+            <span className="font-medium">2. IT Dispatch</span>
+            <div className="h-7 w-7 rounded-md bg-brand-50 text-brand-600 flex items-center justify-center">
+              <Users className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-title font-bold text-surface-900 mt-1">{stats.pendingDispatch}</p>
+          <p className="text-[11px] text-brand-700 mt-0.5 font-medium">Ready to assign technician</p>
+        </Card>
+
+        <Card
+          className={cn(
+            'p-3.5 cursor-pointer transition-all border hover:shadow-sm',
+            statusFilter === 'IN_PROGRESS' ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500' : 'hover:border-surface-300'
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'IN_PROGRESS' ? 'ALL' : 'IN_PROGRESS')}
+        >
+          <div className="flex items-center justify-between text-caption text-surface-500">
+            <span className="font-medium">3. In-Progress</span>
+            <div className="h-7 w-7 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Clock className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-title font-bold text-surface-900 mt-1">{stats.inProgress}</p>
+          <p className="text-[11px] text-blue-700 mt-0.5 font-medium">Active technician triage</p>
+        </Card>
+
+        <Card
+          className={cn(
+            'p-3.5 cursor-pointer transition-all border hover:shadow-sm',
+            statusFilter === 'ON_HOLD' ? 'border-warning-500 bg-warning-50/40 ring-1 ring-warning-500' : 'hover:border-surface-300'
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'ON_HOLD' ? 'ALL' : 'ON_HOLD')}
+        >
+          <div className="flex items-center justify-between text-caption text-surface-500">
+            <span className="font-medium">3. On-Hold</span>
+            <div className="h-7 w-7 rounded-md bg-warning-50 text-warning-600 flex items-center justify-center">
+              <PauseCircle className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-title font-bold text-surface-900 mt-1">{stats.onHold}</p>
+          <p className="text-[11px] text-warning-700 mt-0.5 font-medium">Awaiting spare parts / vendor</p>
+        </Card>
+
+        <Card
+          className={cn(
+            'p-3.5 cursor-pointer transition-all border hover:shadow-sm',
+            statusFilter === 'DONE' ? 'border-success-500 bg-success-50/40 ring-1 ring-success-500' : 'hover:border-surface-300'
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'DONE' ? 'ALL' : 'DONE')}
+        >
+          <div className="flex items-center justify-between text-caption text-surface-500">
+            <span className="font-medium">4. Resolved</span>
+            <div className="h-7 w-7 rounded-md bg-success-50 text-success-600 flex items-center justify-center">
+              <CheckCircle2 className="h-4 w-4" />
+            </div>
+          </div>
+          <p className="text-title font-bold text-surface-900 mt-1">{stats.done}</p>
+          <p className="text-[11px] text-success-700 mt-0.5 font-medium">Closed & verified</p>
+        </Card>
+      </div>
+
+      {/* 3. AI Natural Language Search (Identical Pattern to Asset Management) */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 relative">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2">
+              <Sparkles className="h-4 w-4 text-brand-500" />
+            </div>
+            <input
+              value={aiQuery}
+              onChange={(e) => setAiQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAISearch(); }}
+              placeholder="Ask AI: e.g. 'Show critical hardware repairs pending dispatch' or 'Find requests in Engineering'"
+              className="w-full rounded-xl border border-brand-200 bg-brand-50/30 pl-10 pr-4 py-2.5 text-body text-surface-900 placeholder:text-surface-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 transition-all"
+            />
+          </div>
+          <Button
+            size="sm"
+            leftIcon={<Send className="h-4 w-4" />}
+            onClick={handleAISearch}
+            disabled={!aiQuery.trim()}
+          >
+            Ask AI
+          </Button>
+        </div>
+
+        {aiInterpretation && (
+          <div className="flex items-start gap-3 p-3 rounded-lg bg-brand-50 border border-brand-100 animate-fade-in-up">
+            <div className="h-7 w-7 rounded-md bg-gradient-to-br from-brand-600 to-accent-600 flex items-center justify-center shrink-0">
+              <Sparkles className="h-4 w-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-caption font-medium text-brand-700 mb-1">AI interpreted:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {aiInterpretation.filters.length === 0 ? (
+                  <span className="text-caption text-surface-500">No specific filters detected — showing all tickets.</span>
+                ) : (
+                  aiInterpretation.filters.map((f, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 text-caption bg-white border border-brand-200 text-brand-700 px-2 py-0.5 rounded-md font-medium">
+                      {f.label} = {f.value}
+                    </span>
+                  ))
+                )}
+              </div>
+              <p className="text-caption text-surface-600 mt-1.5">
+                Found <span className="font-bold text-surface-900">{aiInterpretation.count}</span> matching IT requisition tickets
+              </p>
+            </div>
+            <button onClick={clearAISearch} className="text-surface-400 hover:text-surface-600 transition-colors shrink-0">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 4. Collapsible Filters Panel */}
+      {showFilters && (
+        <div className="card-base p-4 animate-fade-in-up">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Select
+              label="Workflow Stage / Status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Statuses' },
+                { value: 'PENDING_DEPT_APPROVAL', label: '1. Pending Dept Approval' },
+                { value: 'PENDING_IT_DISPATCH', label: '2. Pending IT Dispatch' },
+                { value: 'PLANNING', label: '3. Planning' },
+                { value: 'IN_PROGRESS', label: '3. In-Progress' },
+                { value: 'ON_HOLD', label: '3. On-Hold' },
+                { value: 'DONE', label: '4. Resolved & Closed' },
+              ]}
+            />
+
+            <Select
+              label="Priority & SLA"
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Priorities' },
+                { value: 'Critical', label: 'Critical (2 Hours SLA)' },
+                { value: 'High', label: 'High (8 Hours SLA)' },
+                { value: 'Medium', label: 'Medium (24 Hours SLA)' },
+                { value: 'Low', label: 'Low (48 Hours SLA)' },
+              ]}
+            />
+
+            <Select
+              label="Category"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Categories' },
+                ...categoryOptions.map(c => ({ value: c.value, label: `${c.icon} ${c.label}` })),
+              ]}
+            />
+
+            <Select
+              label="Requester Department"
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              options={[
+                { value: 'ALL', label: 'All Departments' },
+                ...departments.map(d => ({ value: d, label: d })),
+              ]}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 5. Main Content: DataTable View or Kanban Board View */}
+      {viewMode === 'list' ? (
+        <DataTable
+          columns={columns}
+          data={filteredTickets}
+          searchable
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by ticket code, asset name, serial, or requester..."
+          rowActions={rowActions}
+          onRowClick={(row) => {
+            onNavigate('ticket-detail', row.ticketCode);
+          }}
+          toolbar={
             <Button
               variant="outline"
               size="sm"
-              className="border-surface-700 bg-surface-800/80 hover:bg-surface-700 text-white"
-              leftIcon={<ShieldCheck className="h-4 w-4 text-amber-400" />}
-              onClick={() => setIsDelegationModalOpen(true)}
+              leftIcon={<Filter className="h-4 w-4" />}
+              onClick={() => setShowFilters((s) => !s)}
             >
-              Delegated Approvers
+              Filters
             </Button>
+          }
+          emptyTitle="No IT requisition tickets found"
+          emptyDescription="Try adjusting your search query, perspective, or filters."
+          emptyAction={
             <Button
               size="sm"
-              className="bg-brand-600 hover:bg-brand-500 text-white shadow-sm"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => {
                 setFormAssetMode('my');
@@ -505,236 +1114,10 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
             >
               New IT Requisition
             </Button>
-          </div>
-        </div>
-
-        {/* Role Perspective Simulator Bar */}
-        <div className="mt-5 pt-4 border-t border-surface-800/80 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-caption font-medium text-surface-400 flex items-center gap-1.5">
-              <UserCheck className="h-3.5 w-3.5 text-brand-400" /> Perspective / Role:
-            </span>
-            <div className="inline-flex bg-surface-800/90 rounded-lg p-0.5 border border-surface-700">
-              <button
-                onClick={() => setPerspective('ALL')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-caption font-medium transition-all',
-                  perspective === 'ALL' ? 'bg-white text-surface-900 shadow-xs' : 'text-surface-300 hover:text-white'
-                )}
-              >
-                All Workflows
-              </button>
-              <button
-                onClick={() => setPerspective('USER')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-caption font-medium transition-all',
-                  perspective === 'USER' ? 'bg-indigo-600 text-white shadow-xs' : 'text-surface-300 hover:text-white'
-                )}
-              >
-                👤 Employee (Sarah Chen)
-              </button>
-              <button
-                onClick={() => setPerspective('DEPT_APPROVER')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-caption font-medium transition-all flex items-center gap-1',
-                  perspective === 'DEPT_APPROVER' ? 'bg-amber-600 text-white shadow-xs' : 'text-surface-300 hover:text-white'
-                )}
-              >
-                👔 Dept Approver
-                {stats.pendingDept > 0 && (
-                  <span className="h-4 px-1.5 rounded-full bg-amber-400 text-surface-950 font-bold text-[10px] flex items-center justify-center">
-                    {stats.pendingDept}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setPerspective('IT_MANAGER')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-caption font-medium transition-all flex items-center gap-1',
-                  perspective === 'IT_MANAGER' ? 'bg-brand-600 text-white shadow-xs' : 'text-surface-300 hover:text-white'
-                )}
-              >
-                🛠️ IT Dispatch
-                {stats.pendingDispatch > 0 && (
-                  <span className="h-4 px-1.5 rounded-full bg-brand-300 text-surface-950 font-bold text-[10px] flex items-center justify-center">
-                    {stats.pendingDispatch}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => setPerspective('IT_TECH')}
-                className={cn(
-                  'px-2.5 py-1 rounded-md text-caption font-medium transition-all flex items-center gap-1',
-                  perspective === 'IT_TECH' ? 'bg-emerald-600 text-white shadow-xs' : 'text-surface-300 hover:text-white'
-                )}
-              >
-                🔧 IT Technician
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="inline-flex bg-surface-800 rounded-lg p-0.5 border border-surface-700">
-              <button
-                onClick={() => setViewMode('board')}
-                className={cn(
-                  'p-1.5 rounded-md text-caption transition-all',
-                  viewMode === 'board' ? 'bg-surface-700 text-white' : 'text-surface-400 hover:text-white'
-                )}
-                title="Kanban Board View"
-              >
-                <Kanban className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'p-1.5 rounded-md text-caption transition-all',
-                  viewMode === 'list' ? 'bg-surface-700 text-white' : 'text-surface-400 hover:text-white'
-                )}
-                title="Data Table View"
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'PENDING_DEPT_APPROVAL' ? 'border-amber-500 bg-amber-50/40 ring-1 ring-amber-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'PENDING_DEPT_APPROVAL' ? 'ALL' : 'PENDING_DEPT_APPROVAL')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>1. Dept Approval</span>
-            <ShieldCheck className="h-4 w-4 text-amber-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{stats.pendingDept}</p>
-          <p className="text-[11px] text-amber-700 mt-0.5 font-medium">Needs Dept Head sign</p>
-        </Card>
-
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'PENDING_IT_DISPATCH' ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'PENDING_IT_DISPATCH' ? 'ALL' : 'PENDING_IT_DISPATCH')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>2. IT Dispatch</span>
-            <Users className="h-4 w-4 text-brand-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{stats.pendingDispatch}</p>
-          <p className="text-[11px] text-brand-700 mt-0.5 font-medium">Ready to assign tech</p>
-        </Card>
-
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'PLANNING' ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'PLANNING' ? 'ALL' : 'PLANNING')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>3. Planning</span>
-            <Calendar className="h-4 w-4 text-indigo-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{tickets.filter(t => t.status === 'PLANNING').length}</p>
-          <p className="text-[11px] text-indigo-700 mt-0.5 font-medium">Sourcing parts / window</p>
-        </Card>
-
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'IN_PROGRESS' ? 'border-blue-500 bg-blue-50/40 ring-1 ring-blue-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'IN_PROGRESS' ? 'ALL' : 'IN_PROGRESS')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>3. In-Progress</span>
-            <Clock className="h-4 w-4 text-blue-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{tickets.filter(t => t.status === 'IN_PROGRESS').length}</p>
-          <p className="text-[11px] text-blue-700 mt-0.5 font-medium">Active technician triage</p>
-        </Card>
-
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'ON_HOLD' ? 'border-warning-500 bg-warning-50/40 ring-1 ring-warning-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'ON_HOLD' ? 'ALL' : 'ON_HOLD')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>3. On-Hold</span>
-            <PauseCircle className="h-4 w-4 text-warning-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{stats.onHold}</p>
-          <p className="text-[11px] text-warning-700 mt-0.5 font-medium">Awaiting vendor / parts</p>
-        </Card>
-
-        <Card
-          className={cn(
-            'p-3.5 cursor-pointer transition-all border',
-            statusFilter === 'DONE' ? 'border-success-500 bg-success-50/40 ring-1 ring-success-500' : 'hover:border-surface-300'
-          )}
-          onClick={() => setStatusFilter(statusFilter === 'DONE' ? 'ALL' : 'DONE')}
-        >
-          <div className="flex items-center justify-between text-caption text-surface-500">
-            <span>4. Resolved</span>
-            <CheckCircle2 className="h-4 w-4 text-success-600" />
-          </div>
-          <p className="text-title font-bold text-surface-900 mt-1">{stats.done}</p>
-          <p className="text-[11px] text-success-700 mt-0.5 font-medium">Verified & closed</p>
-        </Card>
-      </div>
-
-      {/* Filter & Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-lg border border-surface-200 shadow-xs">
-        <div className="flex items-center gap-2 flex-1 max-w-md">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-surface-400" />
-            <input
-              type="text"
-              placeholder="Search by ticket code, asset name, serial, or requester..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="input-base pl-9 text-caption h-9 w-full"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="input-base text-caption h-9 w-auto"
-          >
-            <option value="ALL">All Categories</option>
-            {categoryOptions.map(c => (
-              <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
-            ))}
-          </select>
-
-          {statusFilter !== 'ALL' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setStatusFilter('ALL')}
-              leftIcon={<X className="h-3.5 w-3.5" />}
-            >
-              Clear Status Filter
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Main View Area: Kanban Board or Table View */}
-      {viewMode === 'board' ? (
+          }
+        />
+      ) : (
+        /* Kanban Board View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
           {/* Column 1: Stage 1 - Dept Approval */}
           <div className="bg-surface-50 rounded-xl p-3 border border-surface-200 flex flex-col gap-3 min-h-[500px]">
@@ -753,7 +1136,9 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
-                  onSelect={() => setSelectedTicket(ticket)}
+                  onSelect={() => {
+                    onNavigate('ticket-detail', ticket.ticketCode);
+                  }}
                   onAction={() => {
                     setSelectedTicket(ticket);
                     setIsApproveModalOpen(true);
@@ -765,7 +1150,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
 
               {filteredTickets.filter(t => t.status === 'PENDING_DEPT_APPROVAL').length === 0 && (
                 <div className="p-8 text-center text-caption text-surface-400 border border-dashed border-surface-200 rounded-lg bg-white/50">
-                  No tickets pending department approval
+                  No tickets awaiting approval
                 </div>
               )}
             </div>
@@ -776,7 +1161,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-brand-500" />
-                <h3 className="text-body font-semibold text-surface-900">2. IT Dispatch Queue</h3>
+                <h3 className="text-body font-semibold text-surface-900">2. IT Dispatch</h3>
               </div>
               <Badge variant="brand">
                 {filteredTickets.filter(t => t.status === 'PENDING_IT_DISPATCH').length}
@@ -788,7 +1173,9 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
-                  onSelect={() => setSelectedTicket(ticket)}
+                  onSelect={() => {
+                    onNavigate('ticket-detail', ticket.ticketCode);
+                  }}
                   onAction={() => {
                     setSelectedTicket(ticket);
                     setIsDispatchModalOpen(true);
@@ -800,18 +1187,18 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
 
               {filteredTickets.filter(t => t.status === 'PENDING_IT_DISPATCH').length === 0 && (
                 <div className="p-8 text-center text-caption text-surface-400 border border-dashed border-surface-200 rounded-lg bg-white/50">
-                  No tickets waiting for IT assignment
+                  No tickets pending dispatch
                 </div>
               )}
             </div>
           </div>
 
-          {/* Column 3: Stage 3 - Technician Working (Planning, In-Progress, On-Hold) */}
+          {/* Column 3: Stage 3 - Technician Execution & Hold */}
           <div className="bg-surface-50 rounded-xl p-3 border border-surface-200 flex flex-col gap-3 min-h-[500px]">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-full bg-blue-500" />
-                <h3 className="text-body font-semibold text-surface-900">3. Active IT Jobs</h3>
+                <h3 className="text-body font-semibold text-surface-900">3. Active Triage / Hold</h3>
               </div>
               <Badge variant="accent">
                 {filteredTickets.filter(t => ['PLANNING', 'IN_PROGRESS', 'ON_HOLD'].includes(t.status)).length}
@@ -823,30 +1210,31 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
-                  onSelect={() => setSelectedTicket(ticket)}
+                  onSelect={() => {
+                    onNavigate('ticket-detail', ticket.ticketCode);
+                  }}
                   onAction={() => {
                     setSelectedTicket(ticket);
-                    setUpdateTargetStatus(ticket.status === 'PLANNING' ? 'In-Progress' : ticket.status === 'IN_PROGRESS' ? 'Done' : 'In-Progress');
                     setIsStatusUpdateModalOpen(true);
                   }}
-                  actionLabel="Update Status"
-                  actionVariant="outline"
+                  actionLabel={ticket.status === 'ON_HOLD' ? '⚠️ On-Hold: Update' : 'Update Status'}
+                  actionVariant={ticket.status === 'ON_HOLD' ? 'outline' : 'primary'}
                 />
               ))}
 
               {filteredTickets.filter(t => ['PLANNING', 'IN_PROGRESS', 'ON_HOLD'].includes(t.status)).length === 0 && (
                 <div className="p-8 text-center text-caption text-surface-400 border border-dashed border-surface-200 rounded-lg bg-white/50">
-                  No active technician jobs
+                  No tickets in triage
                 </div>
               )}
             </div>
           </div>
 
-          {/* Column 4: Stage 4 - Resolved / Closed */}
+          {/* Column 4: Stage 4 - Resolved & Closed */}
           <div className="bg-surface-50 rounded-xl p-3 border border-surface-200 flex flex-col gap-3 min-h-[500px]">
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span className="h-2 w-2 rounded-full bg-success-500" />
                 <h3 className="text-body font-semibold text-surface-900">4. Resolved & Verified</h3>
               </div>
               <Badge variant="success">
@@ -859,9 +1247,13 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
-                  onSelect={() => setSelectedTicket(ticket)}
-                  onAction={() => setSelectedTicket(ticket)}
-                  actionLabel="View Summary"
+                  onSelect={() => {
+                    onNavigate('ticket-detail', ticket.ticketCode);
+                  }}
+                  onAction={() => {
+                    onNavigate('ticket-detail', ticket.ticketCode);
+                  }}
+                  actionLabel="View Details"
                   actionVariant="ghost"
                 />
               ))}
@@ -874,93 +1266,252 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
             </div>
           </div>
         </div>
-      ) : (
-        /* Table View */
-        <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-body border-collapse">
-              <thead>
-                <tr className="bg-surface-50 border-b border-surface-200 text-caption font-semibold text-surface-600">
-                  <th className="py-3 px-4">Ticket</th>
-                  <th className="py-3 px-4">Asset / Device</th>
-                  <th className="py-3 px-4">Category & Priority</th>
-                  <th className="py-3 px-4">Requester</th>
-                  <th className="py-3 px-4">Workflow Status</th>
-                  <th className="py-3 px-4">Assigned Tech</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-200">
-                {filteredTickets.map(ticket => (
-                  <tr
-                    key={ticket.id}
-                    className="hover:bg-surface-50/80 transition-colors cursor-pointer"
-                    onClick={() => setSelectedTicket(ticket)}
-                  >
-                    <td className="py-3.5 px-4">
-                      <p className="font-semibold text-surface-900">{ticket.ticketCode}</p>
-                      <p className="text-caption text-surface-500 line-clamp-1">{ticket.title}</p>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        {getAssetIcon(ticket.asset.type)}
-                        <div>
-                          <p className="font-medium text-surface-900 text-caption">{ticket.asset.name}</p>
-                          <p className="text-[11px] text-surface-500">{ticket.asset.code} · S/N: {ticket.asset.serialNumber}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex flex-col gap-1 items-start">
-                        <Badge variant="neutral">{ticket.category}</Badge>
-                        <Badge variant={priorityConfig[ticket.priority].variant} dot>
-                          {ticket.priority} ({priorityConfig[ticket.priority].sla})
-                        </Badge>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <div className="flex items-center gap-2">
-                        <span className={cn('h-6 w-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold', ticket.requester.avatarColor)}>
-                          {ticket.requester.initials}
-                        </span>
-                        <div>
-                          <p className="text-caption font-medium text-surface-900">{ticket.requester.name}</p>
-                          <p className="text-[11px] text-surface-500">{ticket.requester.department}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {getStatusBadge(ticket.status)}
-                    </td>
-                    <td className="py-3.5 px-4">
-                      {ticket.itAssignment.technicianName ? (
-                        <div>
-                          <p className="text-caption font-medium text-surface-900">{ticket.itAssignment.technicianName}</p>
-                          <p className="text-[11px] text-surface-500">{ticket.itAssignment.technicianRole}</p>
-                        </div>
-                      ) : (
-                        <span className="text-caption text-surface-400 italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedTicket(ticket)}
-                      >
-                        Details
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
       )}
 
       {/* ========================================================================= */}
-      {/* 1. Modal: New IT Requisition Form (For Employee / User)                   */}
+      {/* 6. Slide-Over Detail Drawer (Aligned with Asset Management Detail UX)      */}
+      {/* ========================================================================= */}
+      <Drawer
+        open={isDetailDrawerOpen && !!selectedTicket}
+        onClose={() => setIsDetailDrawerOpen(false)}
+        title={selectedTicket ? `Ticket: ${selectedTicket.ticketCode}` : 'Ticket Details'}
+        description={selectedTicket ? `${selectedTicket.category} · Priority: ${selectedTicket.priority}` : ''}
+        width="max-w-xl"
+      >
+        {selectedTicket && (
+          <div className="flex flex-col gap-5 py-2">
+            {/* Status & Priority Highlight Card */}
+            <div className="bg-surface-50 p-4 rounded-xl border border-surface-200">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(selectedTicket.status)}
+                  <Badge variant={priorityConfig[selectedTicket.priority].variant} dot>
+                    {selectedTicket.priority} ({priorityConfig[selectedTicket.priority].sla})
+                  </Badge>
+                </div>
+                <span className="text-caption text-surface-500 font-mono">Created: {selectedTicket.createdAt}</span>
+              </div>
+              <h3 className="text-heading font-bold text-surface-900 mt-2">{selectedTicket.title}</h3>
+              <p className="text-body text-surface-600 mt-1">{selectedTicket.description}</p>
+              
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-surface-200 text-caption">
+                <div>
+                  <span className="text-surface-400 block text-[11px]">Location</span>
+                  <span className="font-medium text-surface-800 flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-surface-400" /> {selectedTicket.location}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-surface-400 block text-[11px]">Requester</span>
+                  <span className="font-medium text-surface-800">{selectedTicket.requester.name} ({selectedTicket.requester.department})</span>
+                </div>
+                <div>
+                  <span className="text-surface-400 block text-[11px]">Assigned Tech</span>
+                  <span className="font-medium text-surface-800">{selectedTicket.itAssignment.technicianName || 'Unassigned'}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4-Stage Workflow Governance Audit Timeline */}
+            <div className="border border-surface-200 rounded-xl p-4 bg-white">
+              <h4 className="text-caption font-bold text-surface-900 mb-3 flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-brand-600" /> 4-Stage Governance & Audit Trail
+              </h4>
+
+              <div className="space-y-4 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-200">
+                {/* Step 1: User Requisition */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className="h-5 w-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold z-10">
+                    ✓
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-caption font-bold text-surface-900">1. User Requisition Submitted</p>
+                      <span className="text-[10px] text-surface-400">{selectedTicket.createdAt}</span>
+                    </div>
+                    <p className="text-[11px] text-surface-600">
+                      By <strong>{selectedTicket.requester.name}</strong> ({selectedTicket.requester.jobTitle})
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2: Department Approval */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className={cn(
+                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
+                    selectedTicket.departmentApproval.approvedAt ? 'bg-emerald-600' : 'bg-surface-400'
+                  )}>
+                    {selectedTicket.departmentApproval.approvedAt ? '✓' : '2'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-caption font-bold text-surface-900">2. Department Head Sign-off</p>
+                      {selectedTicket.departmentApproval.approvedAt && (
+                        <span className="text-[10px] text-surface-400">{selectedTicket.departmentApproval.approvedAt}</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-surface-600">
+                      Approver: <strong>{selectedTicket.departmentApproval.approverName}</strong>
+                      {selectedTicket.departmentApproval.isDelegated && (
+                        <span className="ml-1 text-[10px] bg-amber-100 text-amber-800 font-semibold px-1 rounded">
+                          (Delegated: {selectedTicket.departmentApproval.delegatedBy})
+                        </span>
+                      )}
+                    </p>
+                    {selectedTicket.departmentApproval.comments && (
+                      <p className="text-[11px] text-surface-500 italic mt-0.5 bg-surface-50 p-1.5 rounded border border-surface-200">
+                        "{selectedTicket.departmentApproval.comments}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 3: IT Dispatch & Assignment */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className={cn(
+                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
+                    selectedTicket.itAssignment.technicianName ? 'bg-emerald-600' : 'bg-surface-400'
+                  )}>
+                    {selectedTicket.itAssignment.technicianName ? '✓' : '3'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-caption font-bold text-surface-900">3. IT Dispatch & Assignment</p>
+                      {selectedTicket.itAssignment.assignedAt && (
+                        <span className="text-[10px] text-surface-400">{selectedTicket.itAssignment.assignedAt}</span>
+                      )}
+                    </div>
+                    {selectedTicket.itAssignment.technicianName ? (
+                      <p className="text-[11px] text-surface-600">
+                        Assigned to: <strong>{selectedTicket.itAssignment.technicianName}</strong> ({selectedTicket.itAssignment.technicianRole})
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-surface-400 italic">Waiting for IT Lead assignment</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Step 4: Technician Resolution */}
+                <div className="relative flex items-start gap-3 pl-1">
+                  <div className={cn(
+                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
+                    selectedTicket.status === 'DONE' ? 'bg-emerald-600' : 'bg-surface-400'
+                  )}>
+                    {selectedTicket.status === 'DONE' ? '✓' : '4'}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-caption font-bold text-surface-900">4. Technician Resolution & Sign-off</p>
+                      {selectedTicket.itExecution.completedAt && (
+                        <span className="text-[10px] text-surface-400">{selectedTicket.itExecution.completedAt}</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-surface-600">
+                      Current Step: <strong>{selectedTicket.itExecution.currentStatus}</strong>
+                    </p>
+                    {selectedTicket.itExecution.resolutionNotes && (
+                      <p className="text-[11px] text-emerald-800 bg-emerald-50 p-1.5 rounded border border-emerald-200 mt-1">
+                        {selectedTicket.itExecution.resolutionNotes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Affected Asset Details */}
+            <div className="border border-surface-200 rounded-xl p-4 bg-white">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-caption font-bold text-surface-800">Affected Asset Profile</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[11px]"
+                  rightIcon={<ExternalLink className="h-3 w-3" />}
+                  onClick={() => onNavigate('assets', selectedTicket.asset.id)}
+                >
+                  Open in Asset Ledger
+                </Button>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-lg bg-surface-100 shrink-0">
+                  {getAssetIcon(selectedTicket.asset.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-body font-bold text-surface-900">{selectedTicket.asset.name}</h4>
+                  <p className="text-caption text-surface-500 font-mono">
+                    Code: {selectedTicket.asset.code} · S/N: {selectedTicket.asset.serialNumber}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-surface-100 text-caption">
+                    <div>
+                      <span className="text-[11px] text-surface-400 block">Purchase Cost:</span>
+                      <span className="font-semibold text-surface-800">${selectedTicket.asset.purchaseCost.toLocaleString()}</span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-surface-400 block">Current Book Value:</span>
+                      <span className="font-semibold text-surface-800">${selectedTicket.asset.currentValue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Execution Financials & Telemetry (If Available) */}
+            {(selectedTicket.itExecution.actualCost || selectedTicket.itExecution.downtimeHours) && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-surface-50 rounded-xl border border-surface-200">
+                  <span className="text-[11px] text-surface-500 block">Actual Repair Cost:</span>
+                  <p className="text-title font-bold text-surface-900">${selectedTicket.itExecution.actualCost}</p>
+                </div>
+                <div className="p-3 bg-surface-50 rounded-xl border border-surface-200">
+                  <span className="text-[11px] text-surface-500 block">Asset Downtime:</span>
+                  <p className="text-title font-bold text-surface-900">{selectedTicket.itExecution.downtimeHours} Hours</p>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Context Action Buttons */}
+            <div className="flex items-center gap-2 pt-2">
+              {selectedTicket.status === 'PENDING_DEPT_APPROVAL' && (
+                <Button
+                  className="w-full"
+                  variant="primary"
+                  leftIcon={<ShieldCheck className="h-4 w-4" />}
+                  onClick={() => setIsApproveModalOpen(true)}
+                >
+                  Perform Department Approval
+                </Button>
+              )}
+
+              {selectedTicket.status === 'PENDING_IT_DISPATCH' && (
+                <Button
+                  className="w-full"
+                  variant="primary"
+                  leftIcon={<Users className="h-4 w-4" />}
+                  onClick={() => setIsDispatchModalOpen(true)}
+                >
+                  Assign IT Technician
+                </Button>
+              )}
+
+              {['PLANNING', 'IN_PROGRESS', 'ON_HOLD'].includes(selectedTicket.status) && (
+                <Button
+                  className="w-full"
+                  variant="primary"
+                  leftIcon={<RotateCcw className="h-4 w-4" />}
+                  onClick={() => setIsStatusUpdateModalOpen(true)}
+                >
+                  Update Execution Status (Planning / In-Progress / Hold / Done)
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* ========================================================================= */}
+      {/* 7. Modal: New IT Requisition Form                                         */}
       {/* ========================================================================= */}
       <Modal
         open={isNewTicketModalOpen}
@@ -1049,12 +1600,8 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                       <span className="text-[10px] px-1.5 py-0.2 rounded bg-surface-100 text-surface-600">
                         {asset.location}
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-medium">${asset.currentValue.toLocaleString()}</span>
                     </div>
                   </div>
-                  {formSelectedAssetCode === asset.code && (
-                    <Check className="h-4 w-4 text-brand-600 shrink-0 mt-1" />
-                  )}
                 </div>
               ))}
             </div>
@@ -1064,32 +1611,34 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-caption font-medium text-surface-700 mb-1.5">
-                Request Category (หมวดหมู่ปัญหา)
+                Requisition Category (หมวดหมู่คำขอ) <span className="text-error-500">*</span>
               </label>
               <select
+                className="input-base text-caption w-full"
                 value={formCategory}
                 onChange={(e) => setFormCategory(e.target.value as TicketCategory)}
-                className="input-base text-caption w-full h-9"
               >
-                {categoryOptions.map(c => (
-                  <option key={c.value} value={c.value}>{c.icon} {c.label}</option>
+                {categoryOptions.map(cat => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.icon} {cat.label}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div>
               <label className="block text-caption font-medium text-surface-700 mb-1.5">
-                Urgency & SLA Level (ความเร่งด่วน)
+                Urgency & SLA Level (ระดับความเร่งด่วน) <span className="text-error-500">*</span>
               </label>
               <select
+                className="input-base text-caption w-full"
                 value={formPriority}
                 onChange={(e) => setFormPriority(e.target.value as PriorityLevel)}
-                className="input-base text-caption w-full h-9"
               >
-                <option value="Critical">🔴 Critical (2 Hours SLA - Work Blocked)</option>
-                <option value="High">🟠 High (8 Hours SLA - Urgent)</option>
-                <option value="Medium">🔵 Medium (24 Hours SLA - Standard)</option>
-                <option value="Low">⚪ Low (48 Hours SLA - Minor)</option>
+                <option value="Critical">🚨 Critical (2 Hours SLA - Work Stoppage)</option>
+                <option value="High">⚠️ High (8 Hours SLA - Major Impact)</option>
+                <option value="Medium">⚡ Medium (24 Hours SLA - Routine Servicing)</option>
+                <option value="Low">🌱 Low (48 Hours SLA - Non-urgent Inquiry)</option>
               </select>
             </div>
           </div>
@@ -1126,7 +1675,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
             />
           </div>
 
-          {/* Workflow Chain Preview Banner */}
+          {/* Automated Approval Routing Chain Banner */}
           <div className="bg-brand-50/70 border border-brand-200 rounded-lg p-3 text-caption text-brand-900">
             <p className="font-semibold flex items-center gap-1.5 mb-1 text-brand-800">
               <Sparkles className="h-3.5 w-3.5 text-brand-600" /> Automated Approval Routing Chain
@@ -1158,7 +1707,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* 2. Modal: Department Head Approval Modal                                 */}
+      {/* 8. Modal: Department Head Approval Modal                                 */}
       {/* ========================================================================= */}
       <Modal
         open={isApproveModalOpen && !!selectedTicket}
@@ -1249,7 +1798,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
             <div>
               <Textarea
                 label="Department Comments & Justification (ข้อคิดเห็นหรือเงื่อนไข)"
-                placeholder={approvalAction === 'Approve' ? 'e.g. Approved under urgent Q3 project sprint deadline. Please expedite with Apple Care.' : 'Specify reason for rejection...'}
+                placeholder={approvalAction === 'Approve' ? 'e.g. Approved under urgent project deadline. Please expedite with Apple Care.' : 'Specify reason for rejection...'}
                 rows={2}
                 value={approvalComments}
                 onChange={(e) => setApprovalComments(e.target.value)}
@@ -1272,7 +1821,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
       </Modal>
 
       {/* ========================================================================= */}
-      {/* 3. Modal: IT Manager Dispatch & Technician Assignment Modal              */}
+      {/* 9. Modal: IT Manager Dispatch & Technician Assignment Modal              */}
       {/* ========================================================================= */}
       <Modal
         open={isDispatchModalOpen && !!selectedTicket}
@@ -1299,30 +1848,33 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
               <label className="block text-caption font-medium text-surface-700 mb-1.5">
                 Assign to IT Specialist (เลือกช่างผู้รับผิดชอบ) <span className="text-error-500">*</span>
               </label>
-              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto p-1 border rounded-lg border-surface-200">
+              <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto p-1 border rounded-lg border-surface-200">
                 {technicians.map(tech => (
                   <div
                     key={tech.id}
                     onClick={() => setDispatchTechId(tech.id)}
                     className={cn(
-                      'p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between',
+                      'p-2.5 rounded-lg border text-left cursor-pointer transition-all flex items-center justify-between',
                       dispatchTechId === tech.id
                         ? 'border-brand-500 bg-brand-50/50 ring-1 ring-brand-500'
                         : 'border-surface-200 bg-white hover:border-surface-300'
                     )}
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className={cn('h-8 w-8 rounded-full flex items-center justify-center text-white font-bold text-caption', tech.avatarColor)}>
-                        {tech.initials}
+                      <span className={cn('h-7 w-7 rounded-full flex items-center justify-center text-white text-caption font-bold', tech.avatarColor)}>
+                        {tech.name.split(' ').map(n => n[0]).join('')}
                       </span>
                       <div>
                         <p className="text-caption font-bold text-surface-900">{tech.name}</p>
-                        <p className="text-[11px] text-surface-500">{tech.role} · <span className="text-brand-700">{tech.specialty}</span></p>
+                        <p className="text-[11px] text-surface-500">{tech.specialty}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-surface-100 text-surface-700">
-                        {tech.activeTicketsCount} Active Jobs
+                      <span className={cn(
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                        tech.activeTicketsCount >= 4 ? 'bg-error-100 text-error-800' : 'bg-emerald-100 text-emerald-800'
+                      )}>
+                        {tech.activeTicketsCount} active tasks
                       </span>
                     </div>
                   </div>
@@ -1330,17 +1882,8 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
               </div>
             </div>
 
-            {/* Estimated Cost & Target Date */}
+            {/* Target Date & Cost Estimate */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Input
-                  label="Estimated Repair / Parts Cost ($)"
-                  type="number"
-                  value={dispatchEstimatedCost}
-                  onChange={(e) => setDispatchEstimatedCost(e.target.value)}
-                  leftIcon={<DollarSign className="h-4 w-4 text-surface-400" />}
-                />
-              </div>
               <div>
                 <Input
                   label="Target Resolution Date"
@@ -1349,13 +1892,22 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                   onChange={(e) => setDispatchTargetDate(e.target.value)}
                 />
               </div>
+              <div>
+                <Input
+                  label="Estimated Budget ($)"
+                  type="number"
+                  value={dispatchEstimatedCost}
+                  onChange={(e) => setDispatchEstimatedCost(e.target.value)}
+                  leftIcon={<DollarSign className="h-4 w-4 text-surface-400" />}
+                />
+              </div>
             </div>
 
-            {/* Diagnostic Directives */}
+            {/* Dispatch Instructions */}
             <div>
               <Textarea
-                label="Dispatch Directives & Diagnostic Plan (คำแนะนำสำหรับช่าง)"
-                placeholder="e.g. Check hardware logic board GPU thermal paste and test battery capacity. Order parts if required."
+                label="Dispatch Notes / Instructions for Tech"
+                placeholder="e.g. Check battery cycle count and backup data to NAS before formatting..."
                 rows={2}
                 value={dispatchNotes}
                 onChange={(e) => setDispatchNotes(e.target.value)}
@@ -1371,120 +1923,113 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
           <Button
             variant="primary"
             leftIcon={<Send className="h-4 w-4" />}
-            onClick={handleDispatchIT}
+            onClick={handleDispatchAssign}
           >
-            Confirm Dispatch & Assign Tech
+            Dispatch to Technician
           </Button>
         </div>
       </Modal>
 
       {/* ========================================================================= */}
-      {/* 4. Modal: IT Technician Status & Progress Update Modal                   */}
+      {/* 10. Modal: IT Technician Status Update (In-Progress / Hold / Done)        */}
       {/* ========================================================================= */}
       <Modal
         open={isStatusUpdateModalOpen && !!selectedTicket}
         onClose={() => setIsStatusUpdateModalOpen(false)}
-        title="Update Execution Status / บันทึกผลการแก้ไข"
-        description={`Updating progress for ${selectedTicket?.ticketCode} (${selectedTicket?.asset.name})`}
+        title="Technician Service Update / บันทึกผลการซ่อมและสถานะ"
+        description={`Logging progress and resolution for ${selectedTicket?.ticketCode}`}
         size="md"
       >
         {selectedTicket && (
           <div className="flex flex-col gap-4 py-2">
-            {/* Status Step Selector */}
+            {/* Status Selector */}
             <div>
               <label className="block text-caption font-medium text-surface-700 mb-1.5">
-                Current Execution Status (สถานะการดำเนินงาน)
+                Current Execution Status (สถานะการดำเนินการ)
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setUpdateTargetStatus('Planning')}
-                  className={cn(
-                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all',
-                    updateTargetStatus === 'Planning'
-                      ? 'bg-indigo-50 border-indigo-500 text-indigo-700 ring-1 ring-indigo-500'
-                      : 'bg-white border-surface-200 text-surface-600 hover:bg-surface-50'
-                  )}
-                >
-                  🟡 Planning
-                </button>
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setUpdateTargetStatus('In-Progress')}
                   className={cn(
-                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all',
+                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all flex flex-col items-center gap-1',
                     updateTargetStatus === 'In-Progress'
                       ? 'bg-blue-50 border-blue-500 text-blue-700 ring-1 ring-blue-500'
                       : 'bg-white border-surface-200 text-surface-600 hover:bg-surface-50'
                   )}
                 >
-                  🔵 In-Progress
+                  <Clock className="h-4 w-4 text-blue-600" />
+                  In-Progress
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setUpdateTargetStatus('On-Hold')}
                   className={cn(
-                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all',
+                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all flex flex-col items-center gap-1',
                     updateTargetStatus === 'On-Hold'
-                      ? 'bg-warning-50 border-warning-500 text-warning-700 ring-1 ring-warning-500'
+                      ? 'bg-amber-50 border-amber-500 text-amber-700 ring-1 ring-amber-500'
                       : 'bg-white border-surface-200 text-surface-600 hover:bg-surface-50'
                   )}
                 >
-                  🟠 On-Hold
+                  <PauseCircle className="h-4 w-4 text-amber-600" />
+                  On-Hold (รออะไหล่)
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setUpdateTargetStatus('Done')}
                   className={cn(
-                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all',
+                    'py-2 px-2 rounded-lg border text-caption font-bold text-center transition-all flex flex-col items-center gap-1',
                     updateTargetStatus === 'Done'
                       ? 'bg-emerald-50 border-emerald-500 text-emerald-700 ring-1 ring-emerald-500'
                       : 'bg-white border-surface-200 text-surface-600 hover:bg-surface-50'
                   )}
                 >
-                  🟢 Done
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  Resolved & Done
                 </button>
               </div>
             </div>
 
-            {/* If On-Hold: Show Reason Details */}
+            {/* If On-Hold: Hold Reason Category & Notes */}
             {updateTargetStatus === 'On-Hold' && (
-              <div className="p-3 rounded-lg bg-warning-50/70 border border-warning-200 flex flex-col gap-2.5">
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg space-y-3">
                 <div>
-                  <label className="block text-caption font-semibold text-warning-900 mb-1">
-                    Hold Reason Category (สาเหตุที่พักงานชั่วคราว)
+                  <label className="block text-caption font-semibold text-amber-900 mb-1">
+                    Hold Reason Category (สาเหตุการพักงาน)
                   </label>
                   <select
+                    className="input-base text-caption w-full bg-white"
                     value={updateHoldCategory}
-                    onChange={(e: any) => setUpdateHoldCategory(e.target.value)}
-                    className="input-base text-caption w-full h-9 bg-white"
+                    onChange={(e) => setUpdateHoldCategory(e.target.value as any)}
                   >
-                    <option value="Waiting for Spare Parts">📦 Waiting for Spare Parts / Delivery</option>
-                    <option value="Awaiting User Response">👤 Awaiting User Device Drop-off / Response</option>
-                    <option value="Vendor Escalation">🏢 Vendor / Apple / Dell Escalation</option>
-                    <option value="Scheduled Maintenance Window">⏰ Scheduled Maintenance Window</option>
+                    <option value="Waiting for Spare Parts">📦 Waiting for Spare Parts (รอจัดซื้อ/ส่งอะไหล่)</option>
+                    <option value="Awaiting User Response">💬 Awaiting User Response (รอผู้ใช้งานยืนยันรหัสผ่าน/สำรองข้อมูล)</option>
+                    <option value="Vendor Escalation">🏢 Vendor Escalation (ส่งศูนย์บริการภายนอก เช่น Apple / Dell)</option>
+                    <option value="Scheduled Maintenance Window">⏰ Scheduled Maintenance Window (รอนอกเวลาทำการ)</option>
                   </select>
                 </div>
+
                 <div>
                   <Textarea
-                    label="Hold Justification & ETA"
-                    placeholder="e.g. Awaiting delivery of replacement battery from certified supplier. ETA: Tomorrow 10 AM."
+                    label="Specific Hold Details (บันทึกรายละเอียด)"
+                    placeholder="e.g. Battery replacement part PO-8921 ordered from vendor; expected arrival Friday."
                     rows={2}
                     value={updateHoldReason}
                     onChange={(e) => setUpdateHoldReason(e.target.value)}
-                    required
                   />
                 </div>
               </div>
             )}
 
-            {/* If Done: Show Resolution Summary, Actual Cost, Downtime */}
+            {/* If Done: Resolution Summary & Cost Logging */}
             {updateTargetStatus === 'Done' && (
-              <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200 flex flex-col gap-3">
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg space-y-3">
                 <div>
                   <Textarea
-                    label="Resolution Summary (สรุปการแก้ไขปัญหา)"
-                    placeholder="e.g. Replaced display flex cable and thermal interface. Stress test passed with 0 artifacts."
+                    label="Resolution Summary & Root Cause (สรุปผลการแก้ไขปัญหา)"
+                    placeholder="e.g. Replaced swollen battery pack, reapplied thermal paste, cleaned cooling fan, updated EFI firmware."
                     rows={2}
                     value={updateResolutionNotes}
                     onChange={(e) => setUpdateResolutionNotes(e.target.value)}
@@ -1495,7 +2040,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Input
-                      label="Actual Repair Cost ($)"
+                      label="Actual Cost ($)"
                       type="number"
                       value={updateActualCost}
                       onChange={(e) => setUpdateActualCost(e.target.value)}
@@ -1506,6 +2051,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                     <Input
                       label="Asset Downtime (Hours)"
                       type="number"
+                      step="0.5"
                       value={updateDowntimeHours}
                       onChange={(e) => setUpdateDowntimeHours(e.target.value)}
                       leftIcon={<Clock className="h-4 w-4 text-surface-400" />}
@@ -1515,30 +2061,12 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
 
                 <div>
                   <Input
-                    label="Spare Parts / Items Used (Comma-separated)"
-                    placeholder="e.g. Thermal Paste, Display Flex Cable"
+                    label="Spare Parts Used (อะไหล่ที่เปลี่ยน)"
+                    placeholder="e.g. Battery A2171, Thermal Paste, Screws"
                     value={updatePartsUsed}
                     onChange={(e) => setUpdatePartsUsed(e.target.value)}
                   />
                 </div>
-
-                <div className="text-[11px] text-emerald-800 bg-white p-2 rounded border border-emerald-200 flex items-center gap-1.5">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                  <span>Cost and downtime will be auto-synced into <strong>AI Decision Center</strong> asset history.</span>
-                </div>
-              </div>
-            )}
-
-            {/* If In-Progress or Planning */}
-            {(updateTargetStatus === 'Planning' || updateTargetStatus === 'In-Progress') && (
-              <div>
-                <Textarea
-                  label="Diagnostic & Progress Notes (บันทึกการตรวจสอบ)"
-                  placeholder="e.g. Device received at Helpdesk Lab 2. Diagnostics running..."
-                  rows={2}
-                  value={updateResolutionNotes}
-                  onChange={(e) => setUpdateResolutionNotes(e.target.value)}
-                />
               </div>
             )}
           </div>
@@ -1550,320 +2078,90 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
           </Button>
           <Button
             variant="primary"
-            onClick={handleUpdateExecutionStatus}
+            leftIcon={<Check className="h-4 w-4" />}
+            onClick={handleTechnicianStatusUpdate}
           >
-            Save Progress Update
+            Save Status Update
           </Button>
         </div>
       </Modal>
 
       {/* ========================================================================= */}
-      {/* 5. Modal: Delegated Approver Management (ผู้รักษาการแทน)                   */}
+      {/* 11. Modal: Delegated Approvers Governance Settings                        */}
       {/* ========================================================================= */}
       <Modal
         open={isDelegationModalOpen}
         onClose={() => setIsDelegationModalOpen(false)}
-        title="Delegated Approver Settings / ผู้รักษาการแทนหัวหน้าแผนก"
-        description="Configure acting approvers when department heads are on leave or out of office."
+        title="Delegated Approvers Management (การตั้งค่าผู้รักษาการแทน)"
+        description="Configure proxy sign-off authorities when department heads or leads are on leave or travel."
         size="lg"
       >
         <div className="flex flex-col gap-4 py-2">
-          <p className="text-caption text-surface-600">
-            When a Department Head is out of office, delegated approvers receive full signing authority to approve IT requisitions without bottlenecking SLA.
-          </p>
+          <div className="bg-brand-50 p-3.5 rounded-lg border border-brand-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-brand-600" />
+              <div>
+                <p className="text-caption font-bold text-brand-900">Governance & SOX Audit Compliance</p>
+                <p className="text-[11px] text-brand-700">
+                  Every sign-off records both the Acting Approver and Primary Authority with cryptographic timestamp audit.
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <div className="flex flex-col gap-3">
-            {delegationSettings.map((ds, idx) => (
-              <div
-                key={ds.department}
-                className={cn(
-                  'p-3.5 rounded-lg border transition-all',
-                  ds.isActive ? 'bg-amber-50/50 border-amber-200' : 'bg-surface-50 border-surface-200 opacity-80'
-                )}
-              >
-                <div className="flex items-center justify-between">
+          <div className="divide-y divide-surface-200 border rounded-lg border-surface-200">
+            {delegationSettings.map((rule, idx) => (
+              <div key={rule.department + idx} className="p-3.5 flex items-center justify-between gap-4">
+                <div>
                   <div className="flex items-center gap-2">
-                    <Building className="h-4 w-4 text-surface-500" />
-                    <h4 className="text-body font-bold text-surface-900">{ds.department} Department</h4>
+                    <span className="font-bold text-surface-900 text-caption">{rule.primaryApprover.name}</span>
+                    <span className="text-surface-400">➔</span>
+                    <span className="font-bold text-brand-700 text-caption">{rule.delegatedApprover.name}</span>
+                    <Badge variant={rule.isActive ? 'success' : 'neutral'}>
+                      {rule.isActive ? 'Active Delegation' : 'Inactive'}
+                    </Badge>
                   </div>
-                  <label className="inline-flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={ds.isActive}
-                      onChange={(e) => {
-                        const updated = [...delegationSettings];
-                        updated[idx].isActive = e.target.checked;
-                        setDelegationSettings(updated);
-                        addToast(
-                          e.target.checked ? 'Delegation Activated' : 'Delegation Deactivated',
-                          'info',
-                          `${ds.department}: ${ds.delegatedApprover.name}`
-                        );
-                      }}
-                      className="rounded border-surface-300 text-brand-600 focus:ring-brand-500"
-                    />
-                    <span className="text-caption font-semibold text-surface-800">
-                      {ds.isActive ? 'Active Delegation' : 'Inactive'}
-                    </span>
-                  </label>
+                  <p className="text-[11px] text-surface-500 mt-1">
+                    Department: {rule.department} · {rule.startDate} to {rule.endDate}
+                  </p>
+                  <p className="text-[11px] text-surface-600 italic mt-0.5">
+                    Reason: "{rule.reason}"
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-2.5 border-t border-surface-200/80 text-caption">
-                  <div>
-                    <span className="text-surface-500 block text-[11px]">Primary Department Head:</span>
-                    <p className="font-semibold text-surface-900">{ds.primaryApprover.name}</p>
-                    <p className="text-[11px] text-surface-500">{ds.primaryApprover.title}</p>
-                  </div>
-                  <div className="bg-white/80 p-2 rounded border border-surface-200">
-                    <span className="text-amber-700 font-semibold block text-[11px]">⚡ Acting Delegated Approver:</span>
-                    <p className="font-bold text-surface-900">{ds.delegatedApprover.name}</p>
-                    <p className="text-[11px] text-surface-600">{ds.delegatedApprover.title}</p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={rule.isActive ? 'outline' : 'primary'}
+                    onClick={() => {
+                      const updated = delegationSettings.map((r, i) => i === idx ? { ...r, isActive: !r.isActive } : r);
+                      setDelegationSettings(updated);
+                      push({
+                        variant: 'info',
+                        title: 'Delegation Rule Toggled',
+                        message: `${rule.primaryApprover.name} ➔ ${rule.delegatedApprover.name} is now ${!rule.isActive ? 'Active' : 'Disabled'}`
+                      });
+                    }}
+                  >
+                    {rule.isActive ? 'Deactivate' : 'Activate'}
+                  </Button>
                 </div>
-
-                {ds.isActive && (
-                  <div className="mt-2 text-[11px] text-surface-600 flex items-center justify-between">
-                    <span>Active Duration: <strong>{ds.startDate}</strong> to <strong>{ds.endDate}</strong></span>
-                    <span className="italic text-surface-500">Reason: {ds.reason}</span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="flex justify-end gap-2.5 mt-4 pt-3 border-t border-surface-200">
-          <Button variant="primary" onClick={() => setIsDelegationModalOpen(false)}>
-            Done
+        <div className="flex justify-end mt-4 pt-3 border-t border-surface-200">
+          <Button variant="outline" onClick={() => setIsDelegationModalOpen(false)}>
+            Close
           </Button>
         </div>
       </Modal>
-
-      {/* ========================================================================= */}
-      {/* 6. Drawer: Ticket Details & 4-Stage Visual Lifecycle Stepper              */}
-      {/* ========================================================================= */}
-      <Drawer
-        open={!!selectedTicket}
-        onClose={() => setSelectedTicket(null)}
-        title={selectedTicket?.ticketCode}
-        description={selectedTicket?.title}
-        width="max-w-xl"
-      >
-        {selectedTicket && (
-          <div className="flex flex-col gap-5 py-1">
-            {/* Status & Priority Badge Bar */}
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-surface-200">
-              {getStatusBadge(selectedTicket.status)}
-              <Badge variant={priorityConfig[selectedTicket.priority].variant} dot>
-                {selectedTicket.priority} ({priorityConfig[selectedTicket.priority].sla})
-              </Badge>
-            </div>
-
-            {/* 4-Stage Visual Workflow Stepper */}
-            <div className="bg-surface-50 p-3.5 rounded-xl border border-surface-200">
-              <h4 className="text-caption font-bold text-surface-700 mb-3 flex items-center gap-1.5">
-                <WorkflowIcon className="h-4 w-4 text-brand-600" />
-                4-Stage Governance Workflow Timeline
-              </h4>
-
-              <div className="space-y-3 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-surface-300">
-                {/* Step 1: User Created */}
-                <div className="relative flex items-start gap-3 pl-1">
-                  <div className="h-5 w-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold z-10">
-                    ✓
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-caption font-bold text-surface-900">1. User Requisition Created</p>
-                      <span className="text-[10px] text-surface-400">{selectedTicket.createdAt}</span>
-                    </div>
-                    <p className="text-[11px] text-surface-600">
-                      By <strong>{selectedTicket.requester.name}</strong> ({selectedTicket.requester.department})
-                    </p>
-                  </div>
-                </div>
-
-                {/* Step 2: Department Approval */}
-                <div className="relative flex items-start gap-3 pl-1">
-                  <div className={cn(
-                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
-                    selectedTicket.departmentApproval.status === 'Approved' ? 'bg-emerald-600' : selectedTicket.departmentApproval.status === 'Rejected' ? 'bg-error-600' : 'bg-amber-500'
-                  )}>
-                    {selectedTicket.departmentApproval.status === 'Approved' ? '✓' : selectedTicket.departmentApproval.status === 'Rejected' ? '✗' : '2'}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-caption font-bold text-surface-900">
-                        2. Department Approval ({selectedTicket.departmentApproval.status})
-                      </p>
-                      {selectedTicket.departmentApproval.approvedAt && (
-                        <span className="text-[10px] text-surface-400">{selectedTicket.departmentApproval.approvedAt}</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-surface-600">
-                      Approver: <strong>{selectedTicket.departmentApproval.approverName}</strong>
-                      {selectedTicket.departmentApproval.isDelegated && (
-                        <span className="ml-1 text-[10px] bg-amber-100 text-amber-800 font-semibold px-1 rounded">
-                          (Delegated: {selectedTicket.departmentApproval.delegatedBy})
-                        </span>
-                      )}
-                    </p>
-                    {selectedTicket.departmentApproval.comments && (
-                      <p className="text-[11px] text-surface-500 italic mt-0.5 bg-white p-1.5 rounded border border-surface-200">
-                        "{selectedTicket.departmentApproval.comments}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 3: IT Dispatch & Assignment */}
-                <div className="relative flex items-start gap-3 pl-1">
-                  <div className={cn(
-                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
-                    selectedTicket.itAssignment.technicianName ? 'bg-emerald-600' : 'bg-surface-400'
-                  )}>
-                    {selectedTicket.itAssignment.technicianName ? '✓' : '3'}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-caption font-bold text-surface-900">3. IT Dispatch & Assignment</p>
-                      {selectedTicket.itAssignment.assignedAt && (
-                        <span className="text-[10px] text-surface-400">{selectedTicket.itAssignment.assignedAt}</span>
-                      )}
-                    </div>
-                    {selectedTicket.itAssignment.technicianName ? (
-                      <p className="text-[11px] text-surface-600">
-                        Assigned to: <strong>{selectedTicket.itAssignment.technicianName}</strong> ({selectedTicket.itAssignment.technicianRole})
-                      </p>
-                    ) : (
-                      <p className="text-[11px] text-surface-400 italic">Waiting for IT Manager dispatch</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Step 4: Technician Resolution */}
-                <div className="relative flex items-start gap-3 pl-1">
-                  <div className={cn(
-                    'h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold z-10 text-white',
-                    selectedTicket.status === 'DONE' ? 'bg-emerald-600' : 'bg-surface-400'
-                  )}>
-                    {selectedTicket.status === 'DONE' ? '✓' : '4'}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-caption font-bold text-surface-900">4. Technician Resolution & Sign-off</p>
-                      {selectedTicket.itExecution.completedAt && (
-                        <span className="text-[10px] text-surface-400">{selectedTicket.itExecution.completedAt}</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-surface-600">
-                      Current Step: <strong>{selectedTicket.itExecution.currentStatus}</strong>
-                    </p>
-                    {selectedTicket.itExecution.resolutionNotes && (
-                      <p className="text-[11px] text-emerald-800 bg-emerald-50 p-1.5 rounded border border-emerald-200 mt-1">
-                        {selectedTicket.itExecution.resolutionNotes}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Affected Asset Details */}
-            <div className="border border-surface-200 rounded-lg p-3.5 bg-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-caption font-bold text-surface-700">Affected Asset Profile</span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 text-[11px]"
-                  rightIcon={<ExternalLink className="h-3 w-3" />}
-                  onClick={() => onNavigate('assets', selectedTicket.asset.id)}
-                >
-                  Open in Asset Ledger
-                </Button>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="p-2 rounded-lg bg-surface-100 shrink-0">
-                  {getAssetIcon(selectedTicket.asset.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-body font-bold text-surface-900">{selectedTicket.asset.name}</h4>
-                  <p className="text-caption text-surface-500 font-mono">
-                    Code: {selectedTicket.asset.code} · S/N: {selectedTicket.asset.serialNumber}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-surface-100 text-caption">
-                    <div>
-                      <span className="text-[11px] text-surface-400 block">Purchase Cost:</span>
-                      <span className="font-semibold text-surface-800">${selectedTicket.asset.purchaseCost.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-surface-400 block">Current Book Value:</span>
-                      <span className="font-semibold text-surface-800">${selectedTicket.asset.currentValue.toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Execution Financials & Telemetry (If Available) */}
-            {(selectedTicket.itExecution.actualCost || selectedTicket.itExecution.downtimeHours) && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
-                  <span className="text-[11px] text-surface-500 block">Actual Repair Cost:</span>
-                  <p className="text-title font-bold text-surface-900">${selectedTicket.itExecution.actualCost}</p>
-                </div>
-                <div className="p-3 bg-surface-50 rounded-lg border border-surface-200">
-                  <span className="text-[11px] text-surface-500 block">Asset Downtime:</span>
-                  <p className="text-title font-bold text-surface-900">{selectedTicket.itExecution.downtimeHours} Hours</p>
-                </div>
-              </div>
-            )}
-
-            {/* Quick Context Action Buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              {selectedTicket.status === 'PENDING_DEPT_APPROVAL' && (
-                <Button
-                  className="w-full"
-                  variant="primary"
-                  leftIcon={<ShieldCheck className="h-4 w-4" />}
-                  onClick={() => setIsApproveModalOpen(true)}
-                >
-                  Perform Department Approval
-                </Button>
-              )}
-
-              {selectedTicket.status === 'PENDING_IT_DISPATCH' && (
-                <Button
-                  className="w-full"
-                  variant="primary"
-                  leftIcon={<Users className="h-4 w-4" />}
-                  onClick={() => setIsDispatchModalOpen(true)}
-                >
-                  Assign IT Technician
-                </Button>
-              )}
-
-              {['PLANNING', 'IN_PROGRESS', 'ON_HOLD'].includes(selectedTicket.status) && (
-                <Button
-                  className="w-full"
-                  variant="primary"
-                  leftIcon={<RotateCcw className="h-4 w-4" />}
-                  onClick={() => setIsStatusUpdateModalOpen(true)}
-                >
-                  Update Execution Status (Planning / In-Progress / Hold / Done)
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }
 
-// Sub-component: Clean Card for Kanban and Board View
+// Sub-component: Card for Kanban Board View
 function TicketCard({
   ticket,
   onSelect,
@@ -1880,7 +2178,7 @@ function TicketCard({
   return (
     <div
       onClick={onSelect}
-      className="bg-white rounded-lg p-3.5 border border-surface-200 shadow-xs hover:shadow-md hover:border-brand-300 transition-all cursor-pointer flex flex-col gap-2.5"
+      className="bg-white rounded-xl p-3.5 border border-surface-200 shadow-xs hover:shadow-md hover:border-brand-300 transition-all cursor-pointer flex flex-col gap-2.5"
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-caption font-bold text-surface-800">{ticket.ticketCode}</span>
@@ -1897,7 +2195,7 @@ function TicketCard({
         <p className="text-[11px] text-surface-500 line-clamp-2 mt-0.5">{ticket.description}</p>
       </div>
 
-      <div className="bg-surface-50 p-2 rounded border border-surface-100 flex items-center justify-between text-[11px]">
+      <div className="bg-surface-50 p-2 rounded-lg border border-surface-100 flex items-center justify-between text-[11px]">
         <span className="font-medium text-surface-800 truncate max-w-[160px]">{ticket.asset.name}</span>
         <span className="text-surface-500 font-mono">{ticket.asset.code}</span>
       </div>
@@ -1928,17 +2226,5 @@ function TicketCard({
         </Button>
       </div>
     </div>
-  );
-}
-
-function WorkflowIcon(props: any) {
-  return (
-    <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="6" height="6" rx="1" />
-      <rect x="15" y="3" width="6" height="6" rx="1" />
-      <rect x="9" y="15" width="6" height="6" rx="1" />
-      <path d="M6 9v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V9" />
-      <path d="M12 12v3" />
-    </svg>
   );
 }

@@ -283,9 +283,10 @@ interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  width?: string;
 }
 const modalSizes = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
-export function Modal({ open, onClose, title, description, children, footer, size = 'md' }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md', width }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -297,7 +298,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-surface-950/40 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className={cn('relative w-full bg-white rounded-lg shadow-xl border border-surface-200 animate-scale-in', modalSizes[size])}>
+      <div className={cn('relative w-full bg-white rounded-lg shadow-xl border border-surface-200 animate-scale-in', width || modalSizes[size])}>
         {(title || description) && (
           <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-surface-200">
             <div>
@@ -425,14 +426,18 @@ export function Tabs({ items, active, onChange, className }: TabsProps) {
 /* ---------------- Avatar ---------------- */
 interface AvatarProps {
   initials: string;
+  name?: string;
   color?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
 }
 const avatarSizes = { xs: 'h-6 w-6 text-caption', sm: 'h-8 w-8 text-caption', md: 'h-10 w-10 text-body', lg: 'h-12 w-12 text-title' };
-export function Avatar({ initials, color = 'bg-brand-500', size = 'sm', className }: AvatarProps) {
+export function Avatar({ initials, name, color = 'bg-brand-500', size = 'sm', className }: AvatarProps) {
   return (
-    <span className={cn('inline-flex items-center justify-center rounded-full text-white font-medium shrink-0', color, avatarSizes[size], className)}>
+    <span
+      title={name}
+      className={cn('inline-flex items-center justify-center rounded-full text-white font-medium shrink-0', color, avatarSizes[size], className)}
+    >
       {initials}
     </span>
   );
@@ -642,15 +647,19 @@ export function Progress({ value, max = 100, className, barClass }: { value: num
 interface SectionCardProps {
   title: string;
   description?: string;
+  action?: ReactNode;
   children: ReactNode;
   className?: string;
 }
-export function SectionCard({ title, description, children, className }: SectionCardProps) {
+export function SectionCard({ title, description, action, children, className }: SectionCardProps) {
   return (
     <Card className={cn('overflow-hidden', className)}>
-      <div className="px-5 py-4 border-b border-surface-200">
-        <h3 className="text-title font-semibold text-surface-900">{title}</h3>
-        {description && <p className="text-caption text-surface-500 mt-0.5">{description}</p>}
+      <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-surface-200">
+        <div className="min-w-0">
+          <h3 className="text-title font-semibold text-surface-900 truncate">{title}</h3>
+          {description && <p className="text-caption text-surface-500 mt-0.5">{description}</p>}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       <div className="p-5">{children}</div>
     </Card>

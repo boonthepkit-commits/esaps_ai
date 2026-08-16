@@ -4,6 +4,7 @@ import { ToastProvider } from '@/components/ui';
 import { Dashboard } from '@/pages/Dashboard';
 import { AssetList } from '@/pages/AssetList';
 import { AssetDetail } from '@/pages/AssetDetail';
+import { TicketDetail } from '@/pages/TicketDetail';
 import { CreateAsset } from '@/pages/CreateAsset';
 import { Assignment } from '@/pages/Assignment';
 import { Maintenance } from '@/pages/Maintenance';
@@ -25,7 +26,7 @@ import { pageTitles } from '@/config/navigation';
 type Page =
   | 'dashboard' | 'ai-decision' | 'reconciliation'
   | 'assets' | 'asset-detail' | 'create-asset'
-  | 'assignment' | 'maintenance' | 'licenses' | 'inventory'
+  | 'assignment' | 'maintenance' | 'ticket-detail' | 'licenses' | 'inventory'
   | 'procurement' | 'audit' | 'documents' | 'approvals'
   | 'reports' | 'analytics' | 'notifications'
   | 'administration' | 'user-management' | 'role-management'
@@ -36,9 +37,14 @@ type Page =
 function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [assetId, setAssetId] = useState<string | undefined>();
+  const [ticketId, setTicketId] = useState<string | undefined>();
 
   const navigate = (id: string, aid?: string) => {
-    if (aid) setAssetId(aid);
+    if (id === 'ticket-detail') {
+      if (aid) setTicketId(aid);
+    } else if (aid) {
+      setAssetId(aid);
+    }
     setPage(id as Page);
     window.scrollTo(0, 0);
   };
@@ -62,24 +68,28 @@ function App() {
   if (page === '403') return <ToastProvider><AccessDenied onNavigate={navigate} /></ToastProvider>;
 
   // Breadcrumb builder
-  const breadcrumb = buildBreadcrumb(page);
+  const breadcrumb = buildBreadcrumb(page, ticketId);
 
   return (
     <ToastProvider>
       <AppShell current={page} onNavigate={navigate} breadcrumb={breadcrumb}>
-        {renderPage(page, navigate, assetId)}
+        {renderPage(page, navigate, assetId, ticketId)}
       </AppShell>
     </ToastProvider>
   );
 }
 
-function buildBreadcrumb(page: Page): { label: string; href?: string }[] {
+function buildBreadcrumb(page: Page, ticketId?: string): { label: string; href?: string }[] {
   const meta = pageTitles[page] ?? { title: 'RAISE', subtitle: '' };
   const crumbs: { label: string; href?: string }[] = [{ label: 'Home', href: '#' }];
 
   if (page === 'asset-detail') {
     crumbs.push({ label: 'Asset Management', href: '#' });
     crumbs.push({ label: 'Asset Details' });
+  } else if (page === 'ticket-detail') {
+    crumbs.push({ label: 'IT Service', href: '#' });
+    crumbs.push({ label: 'Tickets', href: '#' });
+    crumbs.push({ label: ticketId || 'REQ-2026-0042' });
   } else if (page === 'create-asset') {
     crumbs.push({ label: 'Asset Management', href: '#' });
     crumbs.push({ label: 'Create Asset' });
@@ -93,13 +103,14 @@ function buildBreadcrumb(page: Page): { label: string; href?: string }[] {
   return crumbs;
 }
 
-function renderPage(page: Page, navigate: (id: string, aid?: string) => void, assetId?: string): React.ReactNode {
+function renderPage(page: Page, navigate: (id: string, aid?: string) => void, assetId?: string, ticketId?: string): React.ReactNode {
   switch (page) {
     case 'dashboard': return <Dashboard onNavigate={navigate} />;
     case 'ai-decision': return <AIDecisionCenter onNavigate={navigate} />;
     case 'reconciliation': return <Reconciliation onNavigate={navigate} />;
     case 'assets': return <AssetList onNavigate={navigate} />;
     case 'asset-detail': return <AssetDetail assetId={assetId ?? 'a1'} onNavigate={navigate} />;
+    case 'ticket-detail': return <TicketDetail ticketCode={ticketId ?? 'REQ-2026-0042'} onNavigate={navigate} />;
     case 'create-asset': return <CreateAsset onNavigate={navigate} />;
     case 'assignment': return <Assignment onNavigate={navigate} />;
     case 'maintenance': return <Maintenance onNavigate={navigate} />;
