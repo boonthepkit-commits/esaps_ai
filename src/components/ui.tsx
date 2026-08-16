@@ -469,7 +469,14 @@ export function Alert({ variant = 'info', title, className, children, onClose }:
 
 /* ---------------- Toast ---------------- */
 interface Toast { id: number; variant: AlertVariant; title: string; message?: string }
-const ToastContext = createContext<{ push: (t: Omit<Toast, 'id'>) => void }>({ push: () => {} });
+interface ToastContextType {
+  push: (t: Omit<Toast, 'id'>) => void;
+  addToast: (title: string, variant?: AlertVariant, message?: string) => void;
+}
+const ToastContext = createContext<ToastContextType>({
+  push: () => {},
+  addToast: () => {},
+});
 export function useToast() { return useContext(ToastContext); }
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -479,8 +486,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((p) => [...p, { ...t, id }]);
     setTimeout(() => setToasts((p) => p.filter((x) => x.id !== id)), 4000);
   };
+  const addToast = (title: string, variant: AlertVariant = 'info', message?: string) => {
+    push({ title, variant, message });
+  };
   return (
-    <ToastContext.Provider value={{ push }}>
+    <ToastContext.Provider value={{ push, addToast }}>
       {children}
       {createPortal(
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 w-80">

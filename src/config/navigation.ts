@@ -14,6 +14,8 @@ import {
   Bell,
   Users,
   Settings,
+  Sparkles,
+  FileSpreadsheet,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -34,6 +36,7 @@ export const navGroups: NavGroup[] = [
     label: 'Overview',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'Overview' },
+      { id: 'ai-decision', label: 'AI Decision Center', icon: Sparkles, group: 'Overview' },
     ],
   },
   {
@@ -41,7 +44,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { id: 'assets', label: 'Asset Management', icon: Boxes, group: 'Assets' },
       { id: 'assignment', label: 'Employee Management', icon: Users, group: 'Assets' },
-      { id: 'maintenance', label: 'Maintenance', icon: Wrench, group: 'Assets' },
+      { id: 'maintenance', label: 'IT Requisition & Maintenance', icon: Wrench, group: 'Assets' },
       { id: 'licenses', label: 'Software License', icon: KeyRound, group: 'Assets' },
       { id: 'inventory', label: 'Inventory', icon: Warehouse, group: 'Assets' },
     ],
@@ -49,6 +52,7 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Operations',
     items: [
+      { id: 'reconciliation', label: 'Oracle FA Reconcile', icon: FileSpreadsheet, group: 'Operations' },
       { id: 'procurement', label: 'Procurement', icon: ShoppingCart, group: 'Operations' },
       { id: 'audit', label: 'Audit', icon: ClipboardCheck, group: 'Operations' },
       { id: 'documents', label: 'Document Management', icon: FileText, group: 'Operations' },
@@ -76,11 +80,13 @@ export const allNavItems: NavItem[] = navGroups.flatMap((g) => g.items);
 
 export const pageTitles: Record<string, { title: string; subtitle: string }> = {
   dashboard: { title: 'Executive Dashboard', subtitle: 'Real-time overview of your asset portfolio' },
+  'ai-decision': { title: 'AI Decision Center', subtitle: 'Predictive Repair vs. Replace evaluation, ROI simulation, and portfolio risk management' },
+  reconciliation: { title: 'Oracle FA Reconciliation', subtitle: 'Reconcile Physical Barcode/RFID asset subledgers with Oracle Fixed Assets General Ledger' },
   assets: { title: 'Asset Management', subtitle: 'Track and manage all organizational assets' },
   'asset-detail': { title: 'Asset Details', subtitle: 'Comprehensive asset information' },
   'create-asset': { title: 'Create Asset', subtitle: 'Register a new asset in the system' },
   assignment: { title: 'Employee Management', subtitle: 'Manage employees and their assigned assets' },
-  maintenance: { title: 'Maintenance', subtitle: 'Schedule and track asset maintenance' },
+  maintenance: { title: 'IT Requisition & Maintenance', subtitle: '4-Stage Service Desk: User Requisition ➔ Dept Approval (Delegated) ➔ IT Dispatch ➔ Technician Execution' },
   licenses: { title: 'Software Licenses', subtitle: 'Monitor license usage and renewals' },
   inventory: { title: 'Inventory', subtitle: 'Warehouse stock and supplies' },
   procurement: { title: 'Procurement', subtitle: 'Purchase orders and vendor management' },

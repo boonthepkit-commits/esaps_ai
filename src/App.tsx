@@ -9,6 +9,8 @@ import { Assignment } from '@/pages/Assignment';
 import { Maintenance } from '@/pages/Maintenance';
 import { SoftwareLicensePage } from '@/pages/SoftwareLicense';
 import { Inventory } from '@/pages/Inventory';
+import { AIDecisionCenter } from '@/pages/AIDecisionCenter';
+import { Reconciliation } from '@/pages/Reconciliation';
 import { Reports } from '@/pages/Reports';
 import { Administration } from '@/pages/Administration';
 import { UserManagement } from '@/pages/UserManagement';
@@ -21,7 +23,8 @@ import { NotFound, AccessDenied } from '@/pages/ErrorPages';
 import { pageTitles } from '@/config/navigation';
 
 type Page =
-  | 'dashboard' | 'assets' | 'asset-detail' | 'create-asset'
+  | 'dashboard' | 'ai-decision' | 'reconciliation'
+  | 'assets' | 'asset-detail' | 'create-asset'
   | 'assignment' | 'maintenance' | 'licenses' | 'inventory'
   | 'procurement' | 'audit' | 'documents' | 'approvals'
   | 'reports' | 'analytics' | 'notifications'
@@ -93,6 +96,8 @@ function buildBreadcrumb(page: Page): { label: string; href?: string }[] {
 function renderPage(page: Page, navigate: (id: string, aid?: string) => void, assetId?: string): React.ReactNode {
   switch (page) {
     case 'dashboard': return <Dashboard onNavigate={navigate} />;
+    case 'ai-decision': return <AIDecisionCenter onNavigate={navigate} />;
+    case 'reconciliation': return <Reconciliation onNavigate={navigate} />;
     case 'assets': return <AssetList onNavigate={navigate} />;
     case 'asset-detail': return <AssetDetail assetId={assetId ?? 'a1'} onNavigate={navigate} />;
     case 'create-asset': return <CreateAsset onNavigate={navigate} />;

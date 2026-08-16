@@ -185,11 +185,50 @@ export function Dashboard({ onNavigate }: DashboardProps) {
               <span className="text-heading font-bold text-brand-600">5</span>
             </div>
 
-            <Button variant="outline" size="sm" className="mt-auto w-full" leftIcon={<Sparkles className="h-4 w-4 text-brand-600" />}>
-              View All Insights
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-auto w-full"
+              leftIcon={<Sparkles className="h-4 w-4 text-brand-600" />}
+              onClick={() => onNavigate('ai-decision')}
+            >
+              Open AI Decision Center
             </Button>
           </div>
         </Card>
+      </div>
+
+      {/* Oracle FA Reconciliation Highlight Banner */}
+      <div className="bg-gradient-to-r from-surface-900 to-brand-950 text-white rounded-xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-surface-800 shadow-sm">
+        <div className="flex items-center gap-3.5">
+          <div className="h-11 w-11 rounded-lg bg-white/10 flex items-center justify-center text-brand-300 shrink-0">
+            <span className="text-xl">📊</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-caption font-semibold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                Oracle FA Synced
+              </span>
+              <span className="text-caption text-surface-400">94.8% Match Rate</span>
+            </div>
+            <h3 className="text-body font-bold text-white mt-0.5">
+              Oracle Fixed Assets (FA) & Physical Register Reconciliation
+            </h3>
+            <p className="text-caption text-surface-300">
+              1,152 matched · 28 ghost assets detected on floor · 19 unverified paper assets
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-surface-600 bg-white/10 hover:bg-white/20 text-white w-full md:w-auto"
+            onClick={() => onNavigate('reconciliation')}
+          >
+            Review Discrepancies (49)
+          </Button>
+        </div>
       </div>
 
       {/* Charts row */}
