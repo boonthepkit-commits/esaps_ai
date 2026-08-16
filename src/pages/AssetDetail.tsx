@@ -341,6 +341,20 @@ export function AssetDetail({ assetId, onNavigate }: AssetDetailProps) {
                 </div>
               </SectionCard>
             )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            <SectionCard title="Warranty & Coverage">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-surface-400" />
+                  <span className="text-body text-surface-700">Expires {asset.warrantyExpiry}</span>
+                </div>
+                <Badge variant={new Date(asset.warrantyExpiry) < new Date() ? 'error' : 'success'} dot>
+                  {new Date(asset.warrantyExpiry) < new Date() ? 'Expired' : 'Active Warranty'}
+                </Badge>
+              </div>
+            </SectionCard>
 
             {/* AI Asset Analysis */}
             {(() => {
@@ -417,39 +431,6 @@ export function AssetDetail({ assetId, onNavigate }: AssetDetailProps) {
               );
             })()}
           </div>
-
-          <div className="flex flex-col gap-4">
-            <SectionCard title="Financial Information">
-              <div className="flex flex-col gap-4">
-                <div>
-                  <p className="text-caption text-surface-500">Purchase Cost</p>
-                  <p className="text-heading font-bold text-surface-900">${asset.purchaseCost.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-caption text-surface-500">Current Value</p>
-                  <p className="text-heading font-bold text-surface-900">${asset.currentValue.toLocaleString()}</p>
-                  <Progress value={asset.currentValue} max={asset.purchaseCost} className="mt-2" barClass="bg-brand-500" />
-                  <p className="text-caption text-surface-400 mt-1">{Math.round((asset.currentValue / asset.purchaseCost) * 100)}% of original value</p>
-                </div>
-                <div>
-                  <p className="text-caption text-surface-500">Depreciation</p>
-                  <p className="text-body font-semibold text-error-600">-${(asset.purchaseCost - asset.currentValue).toLocaleString()}</p>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard title="Warranty">
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-surface-400" />
-                  <span className="text-body text-surface-700">Expires {asset.warrantyExpiry}</span>
-                </div>
-                <Badge variant={new Date(asset.warrantyExpiry) < new Date() ? 'error' : 'success'} dot>
-                  {new Date(asset.warrantyExpiry) < new Date() ? 'Expired' : 'Active'}
-                </Badge>
-              </div>
-            </SectionCard>
-          </div>
         </div>
       )}
 
@@ -465,7 +446,7 @@ export function AssetDetail({ assetId, onNavigate }: AssetDetailProps) {
                 { date: '2023-12-01', title: 'Transferred from Storage', desc: 'Moved to HQ - Floor 4', user: 'IT Operations' },
                 { date: '2023-11-20', title: 'Received from Vendor', desc: 'Purchase order PO-2023-0142', user: 'Procurement' },
                 { date: '2023-11-15', title: 'Asset Registered', desc: 'Created in system', user: 'Admin' },
-                { date: '2023-11-10', title: 'Purchase Order Created', desc: 'Apple Inc. · $3,299', user: 'James Wilson' },
+                { date: '2023-11-10', title: 'Purchase Order Created', desc: 'Apple Inc. · Verified & Inspected', user: 'James Wilson' },
               ].map((h, i) => (
                 <div key={i} className="relative pb-6 last:pb-0">
                   <div className="absolute -left-4 top-1 h-3 w-3 rounded-full bg-brand-500 ring-4 ring-white" />
@@ -543,10 +524,10 @@ export function AssetDetail({ assetId, onNavigate }: AssetDetailProps) {
                 {assetTickets.filter(t => t.status === 'DONE').length}
               </p>
             </div>
-            <div className="p-3.5 bg-surface-50 rounded-xl border border-surface-200">
-              <span className="text-caption text-surface-500 font-medium">Total Repair Cost</span>
-              <p className="text-title font-bold text-surface-900 mt-1">
-                ${assetTickets.reduce((acc, t) => acc + (t.itExecution.actualCost || t.itAssignment.estimatedCost || 0), 0).toLocaleString()}
+            <div className="p-3.5 bg-brand-50/50 rounded-xl border border-brand-200">
+              <span className="text-caption text-brand-700 font-medium">SLA Resolution Target</span>
+              <p className="text-title font-bold text-brand-900 mt-1">
+                100% On-Track
               </p>
             </div>
           </div>
@@ -635,9 +616,9 @@ export function AssetDetail({ assetId, onNavigate }: AssetDetailProps) {
 
                     <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
                       <div className="text-right text-caption">
-                        <span className="text-surface-400 block text-[11px]">Est / Actual</span>
-                        <span className="font-mono font-bold text-surface-900">
-                          ${(t.itExecution.actualCost || t.itAssignment.estimatedCost || 0).toLocaleString()}
+                        <span className="text-surface-400 block text-[11px]">SLA Target</span>
+                        <span className="font-medium text-surface-800">
+                          {priorityConfig[t.priority].sla}
                         </span>
                       </div>
                       <Button variant="ghost" size="icon">

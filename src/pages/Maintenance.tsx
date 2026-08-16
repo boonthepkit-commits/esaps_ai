@@ -1439,35 +1439,25 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                   {getAssetIcon(selectedTicket.asset.type)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-body font-bold text-surface-900">{selectedTicket.asset.name}</h4>
-                  <p className="text-caption text-surface-500 font-mono">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-body font-bold text-surface-900">{selectedTicket.asset.name}</h4>
+                    <Badge variant="brand">Active Device</Badge>
+                  </div>
+                  <p className="text-caption text-surface-500 font-mono mt-0.5">
                     Code: {selectedTicket.asset.code} · S/N: {selectedTicket.asset.serialNumber}
                   </p>
-                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-surface-100 text-caption">
-                    <div>
-                      <span className="text-[11px] text-surface-400 block">Purchase Cost:</span>
-                      <span className="font-semibold text-surface-800">${selectedTicket.asset.purchaseCost.toLocaleString()}</span>
-                    </div>
-                    <div>
-                      <span className="text-[11px] text-surface-400 block">Current Book Value:</span>
-                      <span className="font-semibold text-surface-800">${selectedTicket.asset.currentValue.toLocaleString()}</span>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Execution Financials & Telemetry (If Available) */}
-            {(selectedTicket.itExecution.actualCost || selectedTicket.itExecution.downtimeHours) && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-surface-50 rounded-xl border border-surface-200">
-                  <span className="text-[11px] text-surface-500 block">Actual Repair Cost:</span>
-                  <p className="text-title font-bold text-surface-900">${selectedTicket.itExecution.actualCost}</p>
-                </div>
-                <div className="p-3 bg-surface-50 rounded-xl border border-surface-200">
+            {/* Execution Telemetry (If Available) */}
+            {selectedTicket.itExecution.downtimeHours && (
+              <div className="p-3 bg-surface-50 rounded-xl border border-surface-200 flex items-center justify-between">
+                <div>
                   <span className="text-[11px] text-surface-500 block">Asset Downtime:</span>
-                  <p className="text-title font-bold text-surface-900">{selectedTicket.itExecution.downtimeHours} Hours</p>
+                  <p className="text-title font-bold text-surface-900 mt-0.5">{selectedTicket.itExecution.downtimeHours} Hours</p>
                 </div>
+                <Badge variant="neutral">SLA Compliant</Badge>
               </div>
             )}
 
@@ -1882,25 +1872,14 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
               </div>
             </div>
 
-            {/* Target Date & Cost Estimate */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Input
-                  label="Target Resolution Date"
-                  type="date"
-                  value={dispatchTargetDate}
-                  onChange={(e) => setDispatchTargetDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <Input
-                  label="Estimated Budget ($)"
-                  type="number"
-                  value={dispatchEstimatedCost}
-                  onChange={(e) => setDispatchEstimatedCost(e.target.value)}
-                  leftIcon={<DollarSign className="h-4 w-4 text-surface-400" />}
-                />
-              </div>
+            {/* Target Date */}
+            <div>
+              <Input
+                label="Target Resolution Date"
+                type="date"
+                value={dispatchTargetDate}
+                onChange={(e) => setDispatchTargetDate(e.target.value)}
+              />
             </div>
 
             {/* Dispatch Instructions */}
@@ -2023,7 +2002,7 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
               </div>
             )}
 
-            {/* If Done: Resolution Summary & Cost Logging */}
+            {/* If Done: Resolution Summary & Downtime */}
             {updateTargetStatus === 'Done' && (
               <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-lg space-y-3">
                 <div>
@@ -2037,26 +2016,15 @@ export function Maintenance({ onNavigate }: MaintenanceProps) {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Input
-                      label="Actual Cost ($)"
-                      type="number"
-                      value={updateActualCost}
-                      onChange={(e) => setUpdateActualCost(e.target.value)}
-                      leftIcon={<DollarSign className="h-4 w-4 text-surface-400" />}
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      label="Asset Downtime (Hours)"
-                      type="number"
-                      step="0.5"
-                      value={updateDowntimeHours}
-                      onChange={(e) => setUpdateDowntimeHours(e.target.value)}
-                      leftIcon={<Clock className="h-4 w-4 text-surface-400" />}
-                    />
-                  </div>
+                <div>
+                  <Input
+                    label="Asset Downtime (Hours)"
+                    type="number"
+                    step="0.5"
+                    value={updateDowntimeHours}
+                    onChange={(e) => setUpdateDowntimeHours(e.target.value)}
+                    leftIcon={<Clock className="h-4 w-4 text-surface-400" />}
+                  />
                 </div>
 
                 <div>

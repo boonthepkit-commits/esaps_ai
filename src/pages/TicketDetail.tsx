@@ -721,7 +721,7 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
                     <span className="font-bold">Requisition Resolved & Closed</span>
                     <p className="text-body text-emerald-800 mt-1">{ticket.itExecution.resolutionNotes || 'All diagnostic and repair tasks verified successfully.'}</p>
                     <p className="text-caption text-emerald-700 mt-0.5">
-                      Completed: {ticket.itExecution.completedAt || 'Recently'} · Total Cost: ${ticket.itExecution.actualCost || 120} · Downtime: {ticket.itExecution.downtimeHours || 4.5} hrs
+                      Completed: {ticket.itExecution.completedAt || 'Recently'} · Downtime: {ticket.itExecution.downtimeHours || 4.5} hrs · SLA Target: Met
                     </p>
                   </div>
                 </div>
@@ -841,15 +841,8 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-caption text-surface-600 sm:border-l sm:border-surface-200 sm:pl-4">
-                  <div>
-                    <span className="text-surface-400 block text-[11px]">Purchase Cost</span>
-                    <span className="font-mono font-bold text-surface-900">${ticket.asset.purchaseCost.toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-surface-400 block text-[11px]">Current Book Value</span>
-                    <span className="font-mono font-bold text-surface-900">${ticket.asset.currentValue.toLocaleString()}</span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="brand" dot>Active in Service</Badge>
                 </div>
               </div>
 
@@ -956,7 +949,7 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
                           Assigned to: <strong>{ticket.itAssignment.technicianName}</strong> ({ticket.itAssignment.technicianRole})
                         </p>
                         <p className="text-surface-500 mt-0.5">
-                          Dispatched by: {ticket.itAssignment.assignedBy || 'IT Operations Manager'} · Estimated Repair Cost: ${ticket.itAssignment.estimatedCost || 250}
+                          Dispatched by: {ticket.itAssignment.assignedBy || 'IT Operations Manager'} · Priority Target: {priorityConfig[ticket.priority].sla}
                         </p>
                       </div>
                     ) : (
@@ -1058,31 +1051,6 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
 
                 <div className="p-2.5 rounded-lg bg-surface-50 border border-surface-200 text-[11px] text-surface-600">
                   Target Due: <strong className="text-surface-800">2026-08-17 17:30</strong> (Within SLA)
-                </div>
-              </div>
-            </Card>
-
-            {/* Financial & Cost Summary Card */}
-            <Card>
-              <CardHeader title="Financial & Repair Cost" description="Expense and downtime ledger" />
-              <div className="p-5 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-body text-surface-600">Estimated Cost</span>
-                  <span className="font-mono font-semibold text-surface-900">${ticket.itAssignment.estimatedCost || 250}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-body text-surface-600">Actual Cost (Parts + Labor)</span>
-                  <span className="font-mono text-title font-bold text-brand-600">
-                    ${ticket.itExecution.actualCost || ticket.itAssignment.estimatedCost || 120}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-surface-200">
-                  <span className="text-body text-surface-600">Device Downtime</span>
-                  <span className="font-mono font-semibold text-surface-900">{ticket.itExecution.downtimeHours || 4.5} Hours</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-body text-surface-600">Cost / Book Value Ratio</span>
-                  <span className="font-mono text-caption font-bold text-emerald-700">4.2% (Economical)</span>
                 </div>
               </div>
             </Card>
@@ -1255,15 +1223,8 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6">
-                <div>
-                  <span className="text-caption text-surface-400 block text-[11px]">Original Cost</span>
-                  <span className="font-mono text-title font-bold text-surface-900">${ticket.asset.purchaseCost.toLocaleString()}</span>
-                </div>
-                <div>
-                  <span className="text-caption text-surface-400 block text-[11px]">Book Value</span>
-                  <span className="font-mono text-title font-bold text-emerald-700">${ticket.asset.currentValue.toLocaleString()}</span>
-                </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="brand" dot>Active in Service</Badge>
               </div>
             </div>
 
@@ -1353,7 +1314,7 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
         <Card>
           <CardHeader
             title="IT Assignment & Work Order Execution"
-            description="Assigned technician, diagnostic notes, parts used, downtime, and labor expenses"
+            description="Assigned technician, diagnostic notes, parts used, and downtime tracking"
             action={
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" leftIcon={<Users className="h-4 w-4" />} onClick={() => setIsDispatchModalOpen(true)}>
@@ -1387,18 +1348,11 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 rounded-xl border border-surface-200 bg-surface-50">
                 <span className="text-caption text-surface-400 block text-[11px]">Parts Utilized</span>
                 <p className="text-body font-semibold text-surface-900 mt-1">
                   {ticket.itExecution.partsUsed?.join(', ') || 'Thermal Paste, Flex Gasket'}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl border border-surface-200 bg-surface-50">
-                <span className="text-caption text-surface-400 block text-[11px]">Actual Incurred Cost</span>
-                <p className="text-title font-bold text-brand-600 mt-1">
-                  ${ticket.itExecution.actualCost || 120}
                 </p>
               </div>
 
@@ -1684,14 +1638,6 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
               ))}
             </div>
           </div>
-
-          <Input
-            label="Estimated Repair Cost ($ USD)"
-            type="number"
-            value={estimatedCost}
-            onChange={(e) => setEstimatedCost(e.target.value)}
-            placeholder="250"
-          />
         </div>
       </Modal>
 
@@ -1765,20 +1711,12 @@ export function TicketDetail({ ticketCode, onNavigate }: TicketDetailProps) {
                 rows={2}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Actual Repair Cost ($ USD)"
-                  type="number"
-                  value={updateActualCost}
-                  onChange={(e) => setUpdateActualCost(e.target.value)}
-                />
-                <Input
-                  label="Total Downtime (Hours)"
-                  type="number"
-                  value={updateDowntimeHours}
-                  onChange={(e) => setUpdateDowntimeHours(e.target.value)}
-                />
-              </div>
+              <Input
+                label="Total Downtime (Hours)"
+                type="number"
+                value={updateDowntimeHours}
+                onChange={(e) => setUpdateDowntimeHours(e.target.value)}
+              />
 
               <Input
                 label="Parts / Components Used"
