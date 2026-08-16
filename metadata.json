@@ -1,0 +1,6 @@
+{
+  "name": "ESAPS - Enterprise Smart Asset & Procurement System",
+  "description": "ระบบบริหารจัดการสินทรัพย์ ครุภัณฑ์ พัสดุ และการจัดซื้อจัดจ้างสำหรับองค์กร (ESAPS)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
